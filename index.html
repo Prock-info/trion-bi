@@ -560,6 +560,7 @@ canvas { display:block; }
   <div class="tab" onclick="showTab('product',this)">商品分析</div>
   <div class="tab" onclick="showTab('member',this)">会員分析</div>
   <div class="tab" onclick="showTab('inventory',this)">在庫</div>
+  <div class="tab" onclick="showTab('replenishment',this)">補充検討</div>
   <div class="tab" onclick="showTab('budget',this)">予算管理</div>
 </div>
 
@@ -765,6 +766,51 @@ canvas { display:block; }
         </thead>
         <tbody id="inv-table-body">
           <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">データを読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ====== REPLENISHMENT ====== -->
+<div id="tab-replenishment" class="tab-content page">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--text2)">表示期間の売上実績 × 倉庫別フリー在庫</div>
+    <select id="repl-filter-cat" onchange="filterReplTable()" style="font-size:11px;padding:4px 8px;border-radius:8px;border:1px solid var(--glass-border2);background:var(--glass-bg);color:var(--navy)">
+      <option value="">すべてのカテゴリ</option>
+    </select>
+    <input id="repl-search" oninput="filterReplTable()" placeholder="商品名で検索..." style="font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--glass-border2);background:var(--glass-bg);color:var(--navy);width:160px">
+    <span id="repl-status" style="font-size:11px;color:var(--text3)">—</span>
+    <div style="margin-left:auto">
+      <button onclick="exportReplCSV()" style="padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--glass-bg);color:var(--navy);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;backdrop-filter:blur(8px)">📥 CSVエクスポート</button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="overflow-x:auto">
+      <table id="repl-table" style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap">
+        <thead>
+          <tr style="background:rgba(15,35,64,0.04);border-bottom:2px solid var(--glass-border)">
+            <th style="text-align:left;padding:10px 8px;color:var(--text2);font-weight:600;position:sticky;left:0;background:rgba(240,244,248,0.98);z-index:2">カテゴリ</th>
+            <th style="text-align:left;padding:10px 8px;color:var(--text2);font-weight:600;position:sticky;left:60px;background:rgba(240,244,248,0.98);z-index:2">商品名</th>
+            <th style="text-align:right;padding:10px 8px;color:#3DD6C8;font-weight:600;border-left:2px solid rgba(61,214,200,0.3)">EC売上</th>
+            <th style="text-align:right;padding:10px 8px;color:#F59E0B;font-weight:600">AZ売上</th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600;border-left:2px solid var(--glass-border)">WEB<br><span style="font-size:9px;font-weight:400">倉30</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">AZ倉庫<br><span style="font-size:9px;font-weight:400">倉2299</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600;border-left:1px solid var(--glass-border2)">シンク<br><span style="font-size:9px;font-weight:400">倉1</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">直営保管<br><span style="font-size:9px;font-weight:400">倉9</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">本社直営<br><span style="font-size:9px;font-weight:400">倉10</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">本社卸<br><span style="font-size:9px;font-weight:400">倉2</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">FLAG<br><span style="font-size:9px;font-weight:400">倉20</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">日本橋<br><span style="font-size:9px;font-weight:400">倉25</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">営業<br><span style="font-size:9px;font-weight:400">倉51</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">個展<br><span style="font-size:9px;font-weight:400">倉53</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--text2);font-weight:600">TP<br><span style="font-size:9px;font-weight:400">倉54</span></th>
+            <th style="text-align:right;padding:10px 8px;color:var(--navy);font-weight:700;border-left:2px solid var(--glass-border)">合計<br><span style="font-size:9px;font-weight:400">フリー</span></th>
+          </tr>
+        </thead>
+        <tbody id="repl-table-body">
+          <tr><td colspan="16" style="text-align:center;padding:40px;color:var(--text3)">「補充検討」タブを開くとデータを読み込みます</td></tr>
         </tbody>
       </table>
     </div>
@@ -1268,6 +1314,10 @@ function showTab(id,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   el.classList.add('active');
+  // 補充検討タブは初回表示時にデータ取得
+  if (id === 'replenishment' && !replLoaded && SESSION_TOKEN) {
+    loadReplenishmentData();
+  }
   renderAll();
 }
 function renderAll(){
@@ -1432,6 +1482,145 @@ function renderInvTable() {
       <td style="padding:7px 6px;text-align:right">${Number(r.stock_qty||0).toLocaleString()}</td>
       <td style="padding:7px 6px;text-align:right">¥${Math.round(Number(r.stock_value||0)).toLocaleString()}</td>
       <td style="padding:7px 6px;text-align:right;color:${rateColor};font-weight:600">${bar}${rate.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+// =====================================================================
+// 補充検討
+// =====================================================================
+let REPL = null;
+let replLoaded = false;
+
+async function loadReplenishmentData() {
+  if (!SESSION_TOKEN) return;
+  document.getElementById('repl-status').textContent = '⟳ 読み込み中...';
+  try {
+    const fmt  = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    const start = fmt(dpState.start);
+    const end   = fmt(dpState.end);
+    const url  = `${GAS_URL}?action=replenishment&token=${encodeURIComponent(SESSION_TOKEN)}&start=${start}&end=${end}`;
+    const data = await jsonp(url);
+    if (!data.ok) throw new Error(data.error);
+    REPL = data.rows;
+    replLoaded = true;
+
+    // カテゴリフィルター更新
+    const cats = [...new Set(REPL.map(r => r.category_name).filter(Boolean))].sort();
+    const sel  = document.getElementById('repl-filter-cat');
+    sel.innerHTML = '<option value="">すべてのカテゴリ</option>';
+    cats.forEach(c => sel.innerHTML += `<option>${c}</option>`);
+
+    document.getElementById('repl-status').textContent = `${REPL.length.toLocaleString()}件`;
+    filterReplTable();
+  } catch(e) {
+    document.getElementById('repl-status').textContent = '⚠ 読込エラー';
+    console.error('補充検討エラー:', e);
+  }
+}
+
+function exportReplCSV() {
+  if (!REPL || REPL.length === 0) { alert('データがありません'); return; }
+
+  const cat    = document.getElementById('repl-filter-cat').value;
+  const search = document.getElementById('repl-search').value.toLowerCase();
+
+  const rows = REPL.filter(r => {
+    if (cat    && r.category_name !== cat) return false;
+    if (search && !(r.product_name || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const headers = [
+    'カテゴリ', '商品コード', '商品名',
+    'EC売上', 'AZ売上',
+    'WEB(倉30)', 'AZ倉庫(倉2299)', 'シンク(倉1)', '直営保管(倉9)',
+    '本社直営(倉10)', '本社卸(倉2)', 'FLAG(倉20)', '日本橋(倉25)',
+    '営業(倉51)', '個展(倉53)', 'TP(倉54)',
+    'フリー在庫合計', '補充数（入力）', 'メモ'
+  ];
+
+  const csvRows = rows.map(r => [
+    r.category_name    || '',
+    r.product_code     || '',
+    r.product_name     || '',
+    r.ec_sales,
+    r.amazon_sales,
+    r.wh_30_web,
+    r.wh_2299_amazon,
+    r.wh_1_shinku,
+    r.wh_9_shinku_choei,
+    r.wh_10_honsha_choei,
+    r.wh_2_honsha_oroshi,
+    r.wh_20_flagship,
+    r.wh_25_nihonbashi,
+    r.wh_51_eigyo,
+    r.wh_53_kojikai,
+    r.wh_54_tp,
+    r.free_stock_total,
+    '',  // 補充数（入力用の空欄）
+    ''   // メモ（入力用の空欄）
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+
+  const fmt  = d => d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  const dateStr = fmt(dpState.start) + '-' + fmt(dpState.end);
+
+  const bom  = '\uFEFF'; // Excel用BOM
+  const csv  = bom + headers.join(',') + '\n' + csvRows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `TRION_補充検討_${dateStr}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function filterReplTable() {
+  if (!REPL) return;
+  const cat    = document.getElementById('repl-filter-cat').value;
+  const search = document.getElementById('repl-search').value.toLowerCase();
+
+  const rows = REPL.filter(r => {
+    if (cat    && r.category_name !== cat) return false;
+    if (search && !(r.product_name || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('repl-table-body');
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:24px;color:var(--text3)">データなし</td></tr>';
+    return;
+  }
+
+  const cell = (v, bold, color) => {
+    const s = bold ? 'font-weight:700;' : '';
+    const c = color ? `color:${color};` : '';
+    return `<td style="text-align:right;padding:6px 8px;${s}${c}">${v > 0 ? v : '<span style="color:var(--text3)">—</span>'}</td>`;
+  };
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const bg = i % 2 === 0 ? '' : 'background:rgba(15,35,64,0.02)';
+    const ecColor  = r.ec_sales     > 0 ? '#3DD6C8' : '';
+    const azColor  = r.amazon_sales > 0 ? '#F59E0B' : '';
+    const totColor = r.free_stock_total <= 0 ? 'var(--red)' : r.free_stock_total <= 3 ? 'var(--amber)' : 'var(--navy)';
+    return `<tr style="border-bottom:1px solid var(--glass-border2);${bg}">
+      <td style="padding:6px 8px;color:var(--text2);position:sticky;left:0;background:${i%2===0?'rgba(240,244,248,0.98)':'rgba(235,240,245,0.98)'};z-index:1;font-size:10px">${r.category_name||''}</td>
+      <td style="padding:6px 8px;position:sticky;left:60px;background:${i%2===0?'rgba(240,244,248,0.98)':'rgba(235,240,245,0.98)'};z-index:1;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${r.product_name||''}">${r.product_name||''}</td>
+      <td style="text-align:right;padding:6px 8px;font-weight:600;color:${ecColor||'var(--text3)'};border-left:2px solid rgba(61,214,200,0.3)">${r.ec_sales > 0 ? r.ec_sales : '—'}</td>
+      <td style="text-align:right;padding:6px 8px;font-weight:600;color:${azColor||'var(--text3)'}">${r.amazon_sales > 0 ? r.amazon_sales : '—'}</td>
+      ${cell(r.wh_30_web,        false, '')}
+      ${cell(r.wh_2299_amazon,   false, '')}
+      ${cell(r.wh_1_shinku,      false, '')}
+      ${cell(r.wh_9_shinku_choei,false, '')}
+      ${cell(r.wh_10_honsha_choei,false,'')}
+      ${cell(r.wh_2_honsha_oroshi,false,'')}
+      ${cell(r.wh_20_flagship,   false, '')}
+      ${cell(r.wh_25_nihonbashi, false, '')}
+      ${cell(r.wh_51_eigyo,      false, '')}
+      ${cell(r.wh_53_kojikai,    false, '')}
+      ${cell(r.wh_54_tp,         false, '')}
+      <td style="text-align:right;padding:6px 8px;font-weight:700;color:${totColor};border-left:2px solid var(--glass-border)">${r.free_stock_total}</td>
     </tr>`;
   }).join('');
 }
