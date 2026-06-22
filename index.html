@@ -1496,7 +1496,8 @@ async function doLogin() {
     document.getElementById('login-overlay').classList.add('hidden');
 
     document.getElementById('db-badge').textContent = '⟳ データ読み込み中...';
-    await Promise.all([loadBigQueryData(), loadInventoryData()]);
+    await loadBigQueryData();
+    loadInventoryData(); // 在庫は売上表示後にバックグラウンドで取得
 
   } catch(e) {
     errEl.textContent = 'ネットワークエラー: ' + e.message;
