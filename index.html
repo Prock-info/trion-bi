@@ -1454,7 +1454,7 @@ function jsonp(url) {
     const timer = setTimeout(() => {
       cleanup();
       reject(new Error('JSONP timeout'));
-    }, 30000);
+    }, 90000);
     function cleanup() {
       delete window[cb];
       script.remove();
