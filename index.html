@@ -2072,6 +2072,60 @@ function jsonp(url) {
   });
 }
 
+
+// ========== 最新データ月を取得して期間自動設定 ==========
+async function loadLatestPeriod() {
+  try {
+    const url = `${GAS_URL}?action=latest&token=${encodeURIComponent(SESSION_TOKEN)}`;
+    const data = await jsonp(url);
+    if (!data.ok || !data.latest_date) return;
+
+    // 最新日付から「その月の1日〜末日」を期間として設定
+    const latest = new Date(data.latest_date);
+    const y = latest.getFullYear();
+    const m = latest.getMonth();
+    const firstDay = new Date(y, m, 1);
+    const lastDay  = new Date(y, m + 1, 0);
+
+    dpState.start = firstDay;
+    dpState.end   = lastDay;
+    dpState.compareOn = true;
+    // 前年同月を比較期間に
+    dpState.cmpStart = new Date(y - 1, m, 1);
+    dpState.cmpEnd   = new Date(y - 1, m + 1, 0);
+
+    dpState.applied = {
+      start: dpState.start, end: dpState.end,
+      compareOn: dpState.compareOn,
+      cmpStart: dpState.cmpStart, cmpEnd: dpState.cmpEnd
+    };
+
+    // UIを更新
+    const mainText = fmtDateShort(dpState.start) + ' → ' + fmtDateShort(dpState.end);
+    document.getElementById('dp-trigger-text').textContent = mainText;
+    const cmpEl = document.getElementById('dp-trigger-compare');
+    cmpEl.textContent = '比較: ' + fmtDateShort(dpState.cmpStart) + ' → ' + fmtDateShort(dpState.cmpEnd);
+    cmpEl.style.display = 'inline';
+    document.getElementById('hero-period-label').textContent = fmtDate(dpState.start) + ' 〜 ' + fmtDate(dpState.end);
+    document.getElementById('compare-banner').classList.add('show');
+    document.getElementById('cmp-banner-text').textContent = fmtDateShort(dpState.cmpStart) + ' → ' + fmtDateShort(dpState.cmpEnd);
+    document.getElementById('cmp-banner-sub').textContent = '（比較期間）';
+    document.getElementById('cmp-col-head').style.display = 'table-cell';
+    document.getElementById('compare-toggle').classList.add('on');
+    document.getElementById('dp-cmp-row').style.display = 'flex';
+
+  } catch(e) {
+    console.warn('最新期間の取得に失敗:', e);
+    // フォールバック：先月を設定
+    const t = new Date();
+    const firstDay = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+    const lastDay  = new Date(t.getFullYear(), t.getMonth(), 0);
+    dpState.start = firstDay;
+    dpState.end   = lastDay;
+    dpState.applied = { start: firstDay, end: lastDay, compareOn: false, cmpStart: null, cmpEnd: null };
+  }
+}
+
 // ========== ログイン ==========
 async function doLogin() {
   const id   = document.getElementById('login-id').value.trim();
@@ -2100,6 +2154,11 @@ async function doLogin() {
     document.getElementById('user-name').textContent   = SESSION_USER;
     document.getElementById('login-overlay').classList.add('hidden');
 
+    document.getElementById('db-badge').textContent = '⟳ 最新データ確認中...';
+    
+    // 最新の_source_dateを取得して期間を自動設定
+    await loadLatestPeriod();
+    
     document.getElementById('db-badge').textContent = '⟳ データ読み込み中...';
     await loadBigQueryData();
     loadInventoryData(); // 在庫は売上表示後にバックグラウンドで取得
@@ -2246,30 +2305,7 @@ renderAll = function() {
 
 
 (function(){
-  applyPreset('thismonth', document.querySelector('[data-preset="thismonth"]'));
-  dpState.compareOn=true;
-  document.getElementById('compare-toggle').classList.add('on');
-  document.getElementById('dp-cmp-row').style.display='flex';
-  document.getElementById('cmp-preset-prev-year').classList.add('active');
-  autoCmpPreset();
-  updateInputs();
-  // ログイン前なので期間設定のみ（applyDatePickerはrenderAllを呼ぶため使わない）
-  dpState.applied = {
-    start: dpState.start, end: dpState.end,
-    compareOn: dpState.compareOn,
-    cmpStart: dpState.cmpStart, cmpEnd: dpState.cmpEnd
-  };
-  // ヘッダーのトリガーテキスト更新
-  const mainText = fmtDateShort(dpState.start) + ' → ' + fmtDateShort(dpState.end);
-  document.getElementById('dp-trigger-text').textContent = mainText;
-  if (dpState.compareOn && dpState.cmpStart && dpState.cmpEnd) {
-    const cmpEl = document.getElementById('dp-trigger-compare');
-    cmpEl.textContent = '比較: ' + fmtDateShort(dpState.cmpStart) + ' → ' + fmtDateShort(dpState.cmpEnd);
-    cmpEl.style.display = 'inline';
-    document.getElementById('compare-banner').classList.add('show');
-    document.getElementById('cmp-banner-text').textContent = fmtDateShort(dpState.cmpStart) + ' → ' + fmtDateShort(dpState.cmpEnd);
-  }
-  document.getElementById('hero-period-label').textContent = fmtDate(dpState.start) + ' 〜 ' + fmtDate(dpState.end);
+  // ログイン後に最新期間を自動取得するため、初期表示は空白
 })();
 renderStatic();
 
