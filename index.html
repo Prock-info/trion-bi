@@ -2236,6 +2236,13 @@ applyDatePicker = function() {
   }
 };
 
+// ログイン前の初期renderAllをスキップするためrenderAllをオーバーライド
+const _origRenderAll = renderAll;
+renderAll = function() {
+  if (!SESSION_TOKEN) return; // ログイン前は描画しない
+  _origRenderAll();
+};
+
 
 (function(){
   applyPreset('28d', document.querySelector('[data-preset="28d"]'));
@@ -2245,7 +2252,23 @@ applyDatePicker = function() {
   document.getElementById('cmp-preset-prev-year').classList.add('active');
   autoCmpPreset();
   updateInputs();
-  applyDatePicker();
+  // ログイン前なので期間設定のみ（applyDatePickerはrenderAllを呼ぶため使わない）
+  dpState.applied = {
+    start: dpState.start, end: dpState.end,
+    compareOn: dpState.compareOn,
+    cmpStart: dpState.cmpStart, cmpEnd: dpState.cmpEnd
+  };
+  // ヘッダーのトリガーテキスト更新
+  const mainText = fmtDateShort(dpState.start) + ' → ' + fmtDateShort(dpState.end);
+  document.getElementById('dp-trigger-text').textContent = mainText;
+  if (dpState.compareOn && dpState.cmpStart && dpState.cmpEnd) {
+    const cmpEl = document.getElementById('dp-trigger-compare');
+    cmpEl.textContent = '比較: ' + fmtDateShort(dpState.cmpStart) + ' → ' + fmtDateShort(dpState.cmpEnd);
+    cmpEl.style.display = 'inline';
+    document.getElementById('compare-banner').classList.add('show');
+    document.getElementById('cmp-banner-text').textContent = fmtDateShort(dpState.cmpStart) + ' → ' + fmtDateShort(dpState.cmpEnd);
+  }
+  document.getElementById('hero-period-label').textContent = fmtDate(dpState.start) + ' 〜 ' + fmtDate(dpState.end);
 })();
 renderStatic();
 
