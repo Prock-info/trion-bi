@@ -625,7 +625,7 @@ canvas { display:block; }
     <div class="card"><div class="card-title">チャネル別 売上 / 粗利</div><div style="height:210px"><canvas id="ch-bar"></canvas></div></div>
     <div class="card"><div class="card-title">チャネル構成比</div>
       <div style="display:flex;align-items:center;gap:16px;height:190px">
-        <canvas id="ch-donut" style="width:130px!important;height:130px!important"></canvas>
+        <canvas id="ch-donut" style="width:130px!important;height:130px!important;max-width:130px;max-height:130px"></canvas>
         <div class="legend" id="ch-legend"></div>
       </div>
     </div>
@@ -657,7 +657,7 @@ canvas { display:block; }
 <div id="tab-channel" class="tab-content page">
   <div class="row2">
     <div class="card"><div class="card-title">得意先別 売上</div>
-      <div class="tbl-scroll"><table class="tbl"><thead><tr><th></th><th>得意先</th><th>チャネル</th><th class="num">売上</th><th class="num">粗利率</th></tr></thead><tbody id="client-tbl"></tbody></table></div>
+      <div class="tbl-scroll"><table class="tbl"><thead><tr><th></th><th>得意先</th><th>チャネル</th><th class="num">売上</th><th class="num">粗利</th><th class="num">粗利率</th></tr></thead><tbody id="client-tbl"></tbody></table></div>
     </div>
     <div class="card"><div class="card-title">チャネル別 粗利率</div><div style="height:260px"><canvas id="ch-gross-bar"></canvas></div></div>
   </div>
@@ -798,7 +798,7 @@ canvas { display:block; }
     <div class="card"><div class="card-title">購入回数分布</div><div style="height:180px"><canvas id="purchase-chart"></canvas></div></div>
     <div class="card"><div class="card-title">性別構成</div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
-        <canvas id="gender-chart" style="width:120px!important;height:120px!important"></canvas>
+        <canvas id="gender-chart" style="width:120px!important;height:120px!important;max-width:120px;max-height:120px"></canvas>
         <div class="legend">
           <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div><div class="legend-lbl">男性</div><div class="legend-val">180</div><div class="legend-pct">48%</div></div>
           <div class="legend-item"><div class="legend-dot" style="background:#CBD5E1"></div><div class="legend-lbl">不明</div><div class="legend-val">143</div><div class="legend-pct">38%</div></div>
@@ -946,13 +946,13 @@ canvas { display:block; }
     <div class="card"><div class="card-title">時間帯別 来客（直営店）</div><div style="height:180px"><canvas id="sc-hourly"></canvas></div></div>
     <div class="card"><div class="card-title">決済方法構成（EC）</div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
-        <canvas id="sc-payment" style="width:120px!important;height:120px!important"></canvas>
+        <canvas id="sc-payment" style="width:120px!important;height:120px!important;max-width:120px;max-height:120px"></canvas>
         <div class="legend" id="sc-payment-legend"></div>
       </div>
     </div>
     <div class="card"><div class="card-title">新規 / リピート（EC）</div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
-        <canvas id="sc-newrepeat" style="width:120px!important;height:120px!important"></canvas>
+        <canvas id="sc-newrepeat" style="width:120px!important;height:120px!important;max-width:120px;max-height:120px"></canvas>
         <div class="legend">
           <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div><div class="legend-lbl">新規</div><div class="legend-val">67</div><div class="legend-pct">66%</div></div>
           <div class="legend-item"><div class="legend-dot" style="background:var(--compare)"></div><div class="legend-lbl">リピート</div><div class="legend-val">35</div><div class="legend-pct">34%</div></div>
@@ -1376,7 +1376,7 @@ function renderSummary(){
 
   // Donut
   const totS=cl.reduce((s,c)=>s+c[1].s,0);
-  rebuildChart('ch-donut',{type:'doughnut',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>c[1].s),backgroundColor:cl.map(c=>P.ch[c[0]]),borderWidth:3,borderColor:'#fff'}]},options:{responsive:false,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.label+': ¥'+fmt(ctx.raw)}}}}});
+  rebuildChart('ch-donut',{type:'doughnut',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>c[1].s),backgroundColor:cl.map(c=>P.ch[c[0]]),borderWidth:3,borderColor:'#fff'}]},options:{responsive:false,maintainAspectRatio:true,aspectRatio:1,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.label+': ¥'+fmt(ctx.raw)}}}}});
   document.getElementById('ch-legend').innerHTML=cl.map(c=>`<div class="legend-item"><div class="legend-dot" style="background:${P.ch[c[0]]}"></div><div class="legend-lbl">${c[0]}</div><div class="legend-val">¥${fmtM(c[1].s)}</div><div class="legend-pct">${(c[1].s/totS*100).toFixed(0)}%</div></div>`).join('');
 
   // Cat bar
@@ -1562,7 +1562,7 @@ function renderProductTable(){
   const avgD=vd.length>0?(vd.reduce((s,r)=>s+r[SD],0)/vd.length).toFixed(1):0;
   document.getElementById('p-sku').innerHTML=total+'<span>SKU</span>';
   document.getElementById('p-sales').innerHTML=fmtM(totS)+'<span>M</span>';
-  document.getElementById('p-grate').innerHTML=avgGR+'<span>%</span>';
+  document.getElementById('p-grate').innerHTML=Number(avgGR).toFixed(1)+'<span>%</span>';
   document.getElementById('p-digest').innerHTML=avgD+'<span>%</span>';
   document.getElementById('product-tbody').innerHTML=slice.map((r,i)=>{
     const d=Math.max(0,Math.min(100,r[SD]));
