@@ -566,6 +566,8 @@ canvas { display:block; }
 
 <!-- FILTER BAR -->
 <div class="filter-bar">
+  <span class="flabel">ブランド</span>
+  <select id="f-brand" onchange="applyFilters()"><option value="">すべて</option><option>TRION</option><option>TOMOE</option></select>
   <span class="flabel">チャネル</span>
   <select id="f-channel" onchange="applyFilters()"><option value="">すべて</option><option>EC</option><option>直営店</option><option>卸/BtoB</option><option>POPUP/百貨店</option></select>
   <span class="flabel">カテゴリ</span>
@@ -587,6 +589,7 @@ canvas { display:block; }
   <div class="tab" onclick="showTab('member',this)">会員分析</div>
   <div class="tab" onclick="showTab('inventory',this)">在庫</div>
   <div class="tab" onclick="showTab('replenishment',this)">補充検討</div>
+  <div class="tab" onclick="showTab('storec',this)">直営×EC</div>
   <div class="tab" onclick="showTab('budget',this)">予算管理</div>
 </div>
 
@@ -625,6 +628,13 @@ canvas { display:block; }
         <canvas id="ch-donut" style="width:130px!important;height:130px!important"></canvas>
         <div class="legend" id="ch-legend"></div>
       </div>
+    </div>
+  </div>
+  <div class="row2" style="margin-bottom:14px">
+    <div class="card"><div class="card-title">ブランド別 売上 / 粗利</div><div style="height:200px"><canvas id="brand-bar"></canvas></div></div>
+    <div class="card"><div class="card-title">ブランド別 実績</div>
+      <table class="tbl"><thead><tr><th>ブランド</th><th class="num">売上</th><th class="num">粗利</th><th class="num">粗利率</th><th class="num">SKU数</th></tr></thead>
+      <tbody id="brand-tbl"></tbody></table>
     </div>
   </div>
   <div class="row2">
@@ -839,6 +849,79 @@ canvas { display:block; }
           <tr><td colspan="16" style="text-align:center;padding:40px;color:var(--text3)">「補充検討」タブを開くとデータを読み込みます</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- ====== 直営×EC ====== -->
+<div id="tab-storec" class="tab-content page">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px">🏪 直営店（スマレジ）<span class="card-sub">2026年5月</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">97<span style="font-size:12px;color:var(--text3);font-weight:400">名</span></div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥2.92<span style="font-size:12px;color:var(--text3);font-weight:400">M</span></div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客単価</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥30,397</div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">会員率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">57<span style="font-size:12px;font-weight:400">%</span></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px">🛒 EC（FUTURESHOP）<span class="card-sub">2026年5月19〜26日</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">受注数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">143<span style="font-size:12px;color:var(--text3);font-weight:400">件</span></div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥5.08<span style="font-size:12px;color:var(--text3);font-weight:400">M</span></div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客単価</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥35,517</div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">新規率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">66<span style="font-size:12px;font-weight:400">%</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card"><div class="card-title">直営店 日別売上・客数</div><div style="height:220px"><canvas id="sc-store-daily"></canvas></div></div>
+    <div class="card"><div class="card-title">EC 日別受注・売上</div><div style="height:220px"><canvas id="sc-ec-daily"></canvas></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card"><div class="card-title">時間帯別 来客（直営店）</div><div style="height:180px"><canvas id="sc-hourly"></canvas></div></div>
+    <div class="card"><div class="card-title">決済方法構成（EC）</div>
+      <div style="display:flex;align-items:center;gap:14px;height:160px">
+        <canvas id="sc-payment" style="width:120px!important;height:120px!important"></canvas>
+        <div class="legend" id="sc-payment-legend"></div>
+      </div>
+    </div>
+    <div class="card"><div class="card-title">新規 / リピート（EC）</div>
+      <div style="display:flex;align-items:center;gap:14px;height:160px">
+        <canvas id="sc-newrepeat" style="width:120px!important;height:120px!important"></canvas>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div><div class="legend-lbl">新規</div><div class="legend-val">67</div><div class="legend-pct">66%</div></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--compare)"></div><div class="legend-lbl">リピート</div><div class="legend-val">35</div><div class="legend-pct">34%</div></div>
+          <div class="legend-item" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(15,35,64,.08)"><div class="legend-lbl" style="color:var(--text3);font-size:10px">会員ステージ保有</div><div class="legend-val" style="font-size:11px">28名</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card"><div class="card-title">会員 / 非会員 売上比較（直営店）</div>
+      <div style="display:flex;align-items:center;gap:16px;height:160px">
+        <canvas id="sc-member" style="width:130px!important;height:130px!important"></canvas>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div><div class="legend-lbl">会員</div><div class="legend-val">¥2.02M</div><div class="legend-pct">69%</div></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--gray)"></div><div class="legend-lbl">非会員</div><div class="legend-val">¥0.89M</div><div class="legend-pct">31%</div></div>
+          <div style="margin-top:10px;font-size:10px;color:var(--text3)">会員数: 55名 / 非会員: 42名</div>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="card-title">会員ステージ別 受注数（EC）</div><div style="height:160px"><canvas id="sc-member-stage"></canvas></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">商品別売上 TOP10（直営店）</div>
+      <div class="tbl-scroll" style="max-height:320px">
+        <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-store-prod"></tbody></table>
+      </div>
+    </div>
+    <div class="card"><div class="card-title">商品別売上 TOP10（EC）</div>
+      <div class="tbl-scroll" style="max-height:320px">
+        <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th class="num">売上</th></tr></thead><tbody id="sc-ec-prod"></tbody></table>
+      </div>
     </div>
   </div>
 </div>
@@ -1134,11 +1217,13 @@ RAW.filters.series.forEach(s=>{document.getElementById('f-series').innerHTML+=`<
 RAW.filters.seasons.forEach(s=>{document.getElementById('f-season').innerHTML+=`<option>${s}</option>`});
 
 function applyFilters(){
+  const brand=document.getElementById('f-brand')?document.getElementById('f-brand').value:'';
   const ch=document.getElementById('f-channel').value;
   const cat=document.getElementById('f-category').value;
   const ser=document.getElementById('f-series').value;
   const sea=document.getElementById('f-season').value;
   filteredRows=RAW.rows.filter(r=>{
+    if(brand&&r[7]!==brand) return false;
     if(ch&&r[RCH]!==ch) return false;
     if(cat&&r[RCAT]!==cat) return false;
     if(ser&&r[RSER]!==ser) return false;
@@ -1156,7 +1241,7 @@ function applyFilters(){
 }
 
 function resetFilters(){
-  ['f-channel','f-category','f-series','f-season'].forEach(id=>document.getElementById(id).value='');
+  ['f-brand','f-channel','f-category','f-series','f-season'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   filteredRows=RAW.rows.slice();
   filteredSkus=RAW.skus.slice();
   document.getElementById('filter-count').textContent='全601件';
@@ -1231,6 +1316,9 @@ function renderSummary(){
   const catM={};rows.forEach(r=>{if(!catM[r[RCAT]])catM[r[RCAT]]=0;catM[r[RCAT]]+=r[RS]});
   const cats=Object.entries(catM).filter(c=>c[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
   rebuildChart('cat-bar',{type:'bar',data:{labels:cats.map(c=>c[0]),datasets:[{data:cats.map(c=>c[1]),backgroundColor:[P.teal,P.blue,P.green,P.lime,'#92F1F6','#C2FFDF','#E9FFD6',P.gray],borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>'¥'+Math.round(v/1e6)+'M'},grid:{color:'#F0F4F8'}},y:{grid:{display:false}}}}});
+
+  // Brand chart
+  renderBrandSummary();
 
   // Ch table
   const cmpColVisible=cmpOn;
@@ -1332,6 +1420,183 @@ function renderStatic(){
   rebuildChart('amz-bar',{type:'bar',data:{labels:amz.map(r=>r.m),datasets:[{data:amz.map(r=>r.s),backgroundColor:P.teal+'88',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>'¥'+Math.round(v/1e4)+'万'},grid:{color:'#F0F4F8'}}}}});
 }
 
+
+// =====================================================================
+// ブランド別（SUMMARY）
+// =====================================================================
+function renderBrandSummary() {
+  const rows = filteredRows;
+  const bColors = { TRION: P.teal, TOMOE: P.amber };
+  const bm = {};
+  rows.forEach(r => {
+    const brand = r[7] || 'TRION';
+    if (!bm[brand]) bm[brand] = { s: 0, g: 0, skus: new Set() };
+    bm[brand].s += r[RS];
+    bm[brand].g += r[RG];
+    bm[brand].skus.add(r[RC]);
+  });
+  const brands = Object.entries(bm).filter(b => b[1].s !== 0).sort((a, b) => b[1].s - a[1].s);
+  rebuildChart('brand-bar', {
+    type: 'bar',
+    data: {
+      labels: brands.map(b => b[0]),
+      datasets: [
+        { label: '売上', data: brands.map(b => b[1].s), backgroundColor: brands.map(b => (bColors[b[0]] || P.blue) + 'CC'), borderRadius: 6, borderSkipped: false },
+        { label: '粗利', data: brands.map(b => b[1].g), backgroundColor: brands.map(b => (bColors[b[0]] || P.blue) + '44'), borderRadius: 6, borderSkipped: false },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 8, padding: 12 } } },
+      scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => '¥' + Math.round(v / 1e6) + 'M' }, grid: { color: '#F0F4F8' } } }
+    }
+  });
+  const brandTbl = document.getElementById('brand-tbl');
+  if (brandTbl) {
+    brandTbl.innerHTML = brands.map(b => {
+      const gr = b[1].s > 0 ? (b[1].g / b[1].s * 100).toFixed(1) : 0;
+      return `<tr><td><span style="font-weight:700;color:${bColors[b[0]] || P.blue}">${b[0]}</span></td><td class="num">¥${fmtM(b[1].s)}</td><td class="num">¥${fmtM(b[1].g)}</td><td class="num ${grClass(gr)}">${gr}%</td><td class="num">${b[1].skus.size}SKU</td></tr>`;
+    }).join('');
+  }
+}
+
+// =====================================================================
+// 直営×ECタブ
+// =====================================================================
+const SC_STORE = {
+  daily: [
+    {d:'05/01',s:136990,c:4},{d:'05/02',s:226067,c:9},{d:'05/03',s:72500,c:3},
+    {d:'05/04',s:426979,c:13},{d:'05/05',s:97450,c:2},{d:'05/06',s:156900,c:4},
+    {d:'05/07',s:105522,c:3},{d:'05/08',s:169004,c:8},{d:'05/09',s:133989,c:4},
+    {d:'05/10',s:38550,c:2},{d:'05/12',s:57700,c:2},{d:'05/13',s:110600,c:3},
+    {d:'05/14',s:123910,c:4},{d:'05/15',s:115270,c:5},{d:'05/16',s:26755,c:2},
+    {d:'05/17',s:42900,c:1},{d:'05/19',s:102079,c:5},{d:'05/20',s:6182,c:2},
+    {d:'05/21',s:62150,c:1},{d:'05/22',s:136510,c:5},{d:'05/23',s:64997,c:3},
+    {d:'05/24',s:287350,c:6},{d:'05/26',s:32340,c:2},{d:'05/27',s:31900,c:1},
+    {d:'05/28',s:153500,c:3}
+  ],
+  hourly: [
+    {h:10,c:2},{h:11,c:13},{h:12,c:26},{h:13,c:10},{h:14,c:16},
+    {h:15,c:9},{h:16,c:8},{h:17,c:8},{h:18,c:2},{h:19,c:3}
+  ],
+  products: [
+    {n:'GLB123 Tan',s:150000,q:1},{n:'GLB123 Black',s:150000,q:1},{n:'GLB113 Black',s:150000,q:1},
+    {n:'DPC280M Honeybeige',s:105546,q:2},{n:'GLB102(LA) R.Blue x White',s:102092,q:2},
+    {n:'GA134 Tan',s:99546,q:1},{n:'GLB102(HT) Black x Yellow',s:99546,q:1},
+    {n:'DPC265R Black',s:97546,q:2},{n:'GLA801V Black',s:95300,q:3},
+    {n:'GLB109(NY) Navy x Gray',s:92500,q:2}
+  ]
+};
+const SC_EC = {
+  daily: [
+    {d:'05/19',s:538440,c:15},{d:'05/20',s:592905,c:17},{d:'05/21',s:470423,c:18},
+    {d:'05/22',s:400780,c:11},{d:'05/23',s:450192,c:15},{d:'05/24',s:1447405,c:31},
+    {d:'05/25',s:567629,c:18},{d:'05/26',s:611220,c:18}
+  ],
+  payment: {'クレジットカード':56,'Amazon Pay':38,'代金引換':23,'銀行振込':17,'PayPay':9},
+  member_stage: {'ブロンズ':19,'シルバー':6,'ゴールド':2,'プラチナ':1},
+  products: [
+    {n:'Gボディバッグ ドジャースモデル',s:324800},{n:'読売GコラボGリュック',s:224000},
+    {n:'読売GコラボGミニトート',s:210800},{n:'阪神TコラボGボディバッグ',s:210000},
+    {n:'GミニトートドジャースM',s:180800},{n:'読売GコラボGボディバッグ',s:140800},
+    {n:'グローブボディバッグ',s:128000},{n:'トート横型',s:108000},
+    {n:'GミニトートヤンキースM',s:108000},{n:'トート横型 マルチ',s:108000}
+  ]
+};
+
+function renderStorecTab() {
+  // 直営店 日別
+  rebuildChart('sc-store-daily', {
+    type: 'bar',
+    data: {
+      labels: SC_STORE.daily.map(d => d.d),
+      datasets: [
+        { label: '売上', data: SC_STORE.daily.map(d => d.s), backgroundColor: P.teal + '99', borderRadius: 3, yAxisID: 'y', order: 2 },
+        { label: '客数', data: SC_STORE.daily.map(d => d.c), type: 'line', borderColor: P.amber, backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y2', order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 8 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+        y: { ticks: { callback: v => '¥' + Math.round(v / 1e4) + '万' }, grid: { color: '#F0F4F8' } },
+        y2: { position: 'right', ticks: { callback: v => v + '名' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+  // EC 日別
+  rebuildChart('sc-ec-daily', {
+    type: 'bar',
+    data: {
+      labels: SC_EC.daily.map(d => d.d),
+      datasets: [
+        { label: '売上', data: SC_EC.daily.map(d => d.s), backgroundColor: P.blue + '99', borderRadius: 3, yAxisID: 'y', order: 2 },
+        { label: '受注数', data: SC_EC.daily.map(d => d.c), type: 'line', borderColor: P.compare, backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y2', order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 8 } } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { ticks: { callback: v => '¥' + Math.round(v / 1e4) + '万' }, grid: { color: '#F0F4F8' } },
+        y2: { position: 'right', ticks: { callback: v => v + '件' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+  // 時間帯
+  rebuildChart('sc-hourly', {
+    type: 'bar',
+    data: { labels: SC_STORE.hourly.map(h => h.h + '時'), datasets: [{ data: SC_STORE.hourly.map(h => h.c), backgroundColor: P.teal + 'BB', borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#F0F4F8' } } } }
+  });
+  // 決済
+  const payKeys = Object.keys(SC_EC.payment);
+  const payVals = payKeys.map(k => SC_EC.payment[k]);
+  const payColors = [P.teal, P.blue, P.amber, P.green, P.gray];
+  rebuildChart('sc-payment', {
+    type: 'doughnut',
+    data: { labels: payKeys, datasets: [{ data: payVals, backgroundColor: payColors, borderWidth: 3, borderColor: '#fff' }] },
+    options: { responsive: false, cutout: '68%', plugins: { legend: { display: false } } }
+  });
+  const totPay = payVals.reduce((a, b) => a + b, 0);
+  const leg = document.getElementById('sc-payment-legend');
+  if (leg) leg.innerHTML = payKeys.map((k, i) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${payColors[i]}"></div><div class="legend-lbl" style="font-size:10px">${k}</div><div class="legend-val" style="font-size:11px">${payVals[i]}</div><div class="legend-pct">${Math.round(payVals[i] / totPay * 100)}%</div></div>`
+  ).join('');
+  // 新規リピート
+  rebuildChart('sc-newrepeat', {
+    type: 'doughnut',
+    data: { labels: ['新規', 'リピート'], datasets: [{ data: [67, 35], backgroundColor: [P.teal, P.compare], borderWidth: 3, borderColor: '#fff' }] },
+    options: { responsive: false, cutout: '68%', plugins: { legend: { display: false } } }
+  });
+  // 会員/非会員
+  rebuildChart('sc-member', {
+    type: 'doughnut',
+    data: { labels: ['会員', '非会員'], datasets: [{ data: [2023186, 894908], backgroundColor: [P.teal, P.gray], borderWidth: 3, borderColor: '#fff' }] },
+    options: { responsive: false, cutout: '68%', plugins: { legend: { display: false } } }
+  });
+  // 会員ステージ
+  const stages = Object.entries(SC_EC.member_stage);
+  const stageColors = ['#CD7F32', '#C0C0C0', '#FFD700', '#E5E4E2'];
+  rebuildChart('sc-member-stage', {
+    type: 'bar',
+    data: { labels: stages.map(s => s[0]), datasets: [{ data: stages.map(s => s[1]), backgroundColor: stageColors, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#F0F4F8' } } } }
+  });
+  // 商品テーブル（直営）
+  const sp = document.getElementById('sc-store-prod');
+  if (sp) sp.innerHTML = SC_STORE.products.map((p, i) =>
+    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.n}</td><td class="num">¥${fmt(p.s)}</td><td class="num">${p.q}</td></tr>`
+  ).join('');
+  // 商品テーブル（EC）
+  const ep = document.getElementById('sc-ec-prod');
+  if (ep) ep.innerHTML = SC_EC.products.map((p, i) =>
+    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.n}</td><td class="num">¥${fmt(p.s)}</td></tr>`
+  ).join('');
+}
+
 // =====================================================================
 // ROUTING
 // =====================================================================
@@ -1340,6 +1605,8 @@ function showTab(id,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   el.classList.add('active');
+  // 直営×ECタブ
+  if (id === 'storec') renderStorecTab();
   // 補充検討タブは初回表示時にデータ取得
   if (id === 'replenishment' && !replLoaded && SESSION_TOKEN) {
     loadReplenishmentData();
@@ -1763,13 +2030,14 @@ async function loadBigQueryData() {
 
     // RAWオブジェクトを更新
     RAW.rows = data.rows.map(r => [
-      r.product_code  ?? '',
-      r.channel       ?? '',
-      r.category_name ?? '',
-      r.series_name   ?? '',
+      r.product_code   ?? '',
+      r.channel        ?? '',
+      r.category_name  ?? '',
+      r.series_name    ?? '',
       Number(r.net_sales    ?? 0),
       Number(r.gross_profit ?? 0),
       Number(r.qty_sold     ?? 0),
+      r.category1_name ?? 'TRION',  // index 7: brand
     ]);
 
     RAW.skus = data.skus.map(r => [
