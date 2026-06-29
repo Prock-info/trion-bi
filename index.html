@@ -625,7 +625,7 @@ canvas { display:block; }
     <div class="card"><div class="card-title">チャネル別 売上 / 粗利</div><div style="height:210px"><canvas id="ch-bar"></canvas></div></div>
     <div class="card"><div class="card-title">チャネル構成比</div>
       <div style="display:flex;align-items:center;gap:16px;height:190px">
-        <canvas id="ch-donut" style="width:130px!important;height:130px!important;max-width:130px;max-height:130px"></canvas>
+        <div style="width:130px;height:130px;flex-shrink:0"><canvas id="ch-donut" style="width:130px!important;height:130px!important"></canvas></div>
         <div class="legend" id="ch-legend"></div>
       </div>
     </div>
@@ -798,7 +798,7 @@ canvas { display:block; }
     <div class="card"><div class="card-title">購入回数分布</div><div style="height:180px"><canvas id="purchase-chart"></canvas></div></div>
     <div class="card"><div class="card-title">性別構成</div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
-        <canvas id="gender-chart" style="width:120px!important;height:120px!important;max-width:120px;max-height:120px"></canvas>
+        <div style="width:120px;height:120px;flex-shrink:0"><canvas id="gender-chart" style="width:120px!important;height:120px!important"></canvas></div>
         <div class="legend">
           <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div><div class="legend-lbl">男性</div><div class="legend-val">180</div><div class="legend-pct">48%</div></div>
           <div class="legend-item"><div class="legend-dot" style="background:#CBD5E1"></div><div class="legend-lbl">不明</div><div class="legend-val">143</div><div class="legend-pct">38%</div></div>
@@ -946,13 +946,13 @@ canvas { display:block; }
     <div class="card"><div class="card-title">時間帯別 来客（直営店）</div><div style="height:180px"><canvas id="sc-hourly"></canvas></div></div>
     <div class="card"><div class="card-title">決済方法構成（EC）</div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
-        <canvas id="sc-payment" style="width:120px!important;height:120px!important;max-width:120px;max-height:120px"></canvas>
+        <div style="width:120px;height:120px;flex-shrink:0"><canvas id="sc-payment" style="width:120px!important;height:120px!important"></canvas></div>
         <div class="legend" id="sc-payment-legend"></div>
       </div>
     </div>
     <div class="card"><div class="card-title">新規 / リピート（EC）</div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
-        <canvas id="sc-newrepeat" style="width:120px!important;height:120px!important;max-width:120px;max-height:120px"></canvas>
+        <div style="width:120px;height:120px;flex-shrink:0"><canvas id="sc-newrepeat" style="width:120px!important;height:120px!important"></canvas></div>
         <div class="legend">
           <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div><div class="legend-lbl">新規</div><div class="legend-val">67</div><div class="legend-pct">66%</div></div>
           <div class="legend-item"><div class="legend-dot" style="background:var(--compare)"></div><div class="legend-lbl">リピート</div><div class="legend-val">35</div><div class="legend-pct">34%</div></div>
@@ -1406,7 +1406,7 @@ function renderChannel(){
   const cm=aggRows(rows);
   const cl=Object.entries(cm).sort((a,b)=>b[1].s-a[1].s);
   rebuildChart('ch-gross-bar',{type:'bar',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>+(c[1].g/c[1].s*100).toFixed(1)),backgroundColor:cl.map(c=>P.ch[c[0]]),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:20,max:80,ticks:{callback:v=>v+'%'},grid:{color:'#F0F4F8'}},x:{grid:{display:false}}}}});
-  document.getElementById('client-tbl').innerHTML=cl.map((c,i)=>`<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${c[0]}</td><td><span class="pill ${pill(c[0])}">${c[0]}</span></td><td class="num">¥${fmt(c[1].s)}</td><td class="num ${grClass(c[1].g/c[1].s*100)}">${(c[1].g/c[1].s*100).toFixed(1)}%</td></tr>`).join('');
+  document.getElementById('client-tbl').innerHTML=cl.map((c,i)=>`<tr><td class=\"rank ${i<3?'top3':''}\">${ i+1}</td><td style=\"font-size:11px\">${c[0]}</td><td><span class=\"pill ${pill(c[0])}\">${c[0]}</span></td><td class=\"num\">¥${fmtM(c[1].s)}</td><td class=\"num\">¥${fmtM(c[1].g)}</td><td class=\"num ${grClass(c[1].g/c[1].s*100)}\">${(c[1].g/c[1].s*100).toFixed(1)}%</td></tr>`).join('');
   const days=RAW.daily;
   rebuildChart('daily-bar',{
     type:'bar',
@@ -1569,7 +1569,7 @@ function renderProductTable(){
     const col=dCol(d);
     const inv=r[SI];
     const invDisp=inv<0?`<span style="color:var(--red)">${fmt(inv)}</span>`:fmt(inv);
-    return`<tr style="cursor:pointer" onclick="openProductModal('${r[SK]}',this)" ><td class="rank ${start+i<3?'top3':''}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500">${r[SH]}</td><td style="font-size:11px">${r[SN]}</td><td><span style="font-size:10px;color:var(--text3)">${r[SCAT]}</span></td><td style="font-size:10px;color:var(--text3)">${r[SSON]}</td><td class="num">¥${fmt(r[SS])}</td><td class="num">¥${fmt(r[SG])}</td><td class="num ${grClass(r[SGR])}">${r[SGR]}%</td><td class="num">${r[SQ]}</td><td class="num">${invDisp}</td><td><div class="digest"><div class="digest-bar"><div class="digest-fill" style="width:${d}%;background:${col}"></div></div><span style="font-size:10px;color:${col};min-width:36px;font-weight:500">${r[SD]}%</span></div></td><td class="num muted">¥${fmt(r[SP])}</td></tr>`;
+    return`<tr style="cursor:pointer" onclick="openProductModal('${r[SK]}',this)" ><td class="rank ${start+i<3?'top3':''}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500">${r[SH]}</td><td style="font-size:11px">${r[SN]}</td><td><span style="font-size:10px;color:var(--text3)">${r[SCAT]}</span></td><td style="font-size:10px;color:var(--text3)">${r[SSON]}</td><td class="num">¥${fmt(r[SS])}</td><td class="num">¥${fmt(r[SG])}</td><td class="num ${grClass(parseFloat(r[SGR]||0))}">${parseFloat(r[SGR]||0).toFixed(1)}%</td><td class="num">${r[SQ]}</td><td class="num">${invDisp}</td><td><div class="digest"><div class="digest-bar"><div class="digest-fill" style="width:${d}%;background:${col}"></div></div><span style="font-size:10px;color:${col};min-width:36px;font-weight:500">${r[SD]}%</span></div></td><td class="num muted">¥${fmt(r[SP])}</td></tr>`;
   }).join('');
   document.getElementById('p-info').textContent=`${start+1}〜${end} / ${total}件`;
   document.getElementById('p-prev').disabled=productPage_===0;
