@@ -502,9 +502,9 @@ canvas { display:block; }
       <div class="dp-preset" data-preset="today" onclick="applyPreset('today',this)">今日</div>
       <div class="dp-preset" data-preset="yesterday" onclick="applyPreset('yesterday',this)">昨日</div>
       <div class="dp-preset" data-preset="7d" onclick="applyPreset('7d',this)">過去7日間</div>
-      <div class="dp-preset active" data-preset="28d" onclick="applyPreset('28d',this)">過去28日間</div>
+      <div class="dp-preset" data-preset="28d" onclick="applyPreset('28d',this)">過去28日間</div>
       <div class="dp-preset" data-preset="30d" onclick="applyPreset('30d',this)">過去30日間</div>
-      <div class="dp-preset" data-preset="thismonth" onclick="applyPreset('thismonth',this)">今月</div>
+      <div class="dp-preset active" data-preset="thismonth" onclick="applyPreset('thismonth',this)">今月</div>
       <div class="dp-preset" data-preset="lastmonth" onclick="applyPreset('lastmonth',this)">先月</div>
       <div class="dp-preset-sep"></div>
       <div class="dp-preset-label">カスタム</div>
@@ -2216,6 +2216,7 @@ async function loadBigQueryData() {
     document.getElementById('db-badge').style.color = '#16A34A';
 
     applyFilters();
+    _origRenderAll(); // ログイン後の初回描画
 
   } catch(e) {
     console.error('GAS proxy error:', e);
@@ -2245,7 +2246,7 @@ renderAll = function() {
 
 
 (function(){
-  applyPreset('28d', document.querySelector('[data-preset="28d"]'));
+  applyPreset('thismonth', document.querySelector('[data-preset="thismonth"]'));
   dpState.compareOn=true;
   document.getElementById('compare-toggle').classList.add('on');
   document.getElementById('dp-cmp-row').style.display='flex';
