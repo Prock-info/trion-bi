@@ -1427,8 +1427,20 @@ function renderProductTable(){
   const b=[0,0,0,0,0];
   skus.forEach(r=>{const d=r[SD];if(d<20)b[0]++;else if(d<40)b[1]++;else if(d<60)b[2]++;else if(d<80)b[3]++;else b[4]++});
   rebuildChart('digest-dist',{type:'bar',data:{labels:['〜20%','20-40%','40-60%','60-80%','80%+'],datasets:[{data:b,backgroundColor:[P.red+'CC',P.amber+'BB',P.teal+'77',P.teal+'BB',P.green],borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#F0F4F8'}}}}});
-  const cdm={};filteredSkus.filter(r=>r[SS]>0).forEach(r=>{if(!cdm[r[SCAT]])cdm[r[SCAT]]={sum:0,cnt:0};cdm[r[SCAT]].sum+=r[SD];cdm[r[SCAT]].cnt++});
-  const cdl=Object.entries(cdm).map(([k,v])=>({cat:k,avg:+(v.sum/v.cnt).toFixed(1)})).sort((a,b)=>b.avg-a.avg).slice(0,10);
+  // INVデータから消化率を取得（v_sell_through）
+  const cdm={};
+  if(INV && INV.catInv && INV.catInv.length>0){
+    INV.catInv.forEach(r=>{
+      if(r.category_name && r.sell_through_rate!=null){
+        cdm[r.category_name]={avg:+(Number(r.sell_through_rate)*100).toFixed(1)};
+      }
+    });
+  } else {
+    // フォールバック：SKUデータから
+    filteredSkus.filter(r=>r[SS]>0).forEach(r=>{if(!cdm[r[SCAT]])cdm[r[SCAT]]={sum:0,cnt:0};if(typeof cdm[r[SCAT]].sum!=='undefined'){cdm[r[SCAT]].sum+=r[SD];cdm[r[SCAT]].cnt++}});
+    Object.keys(cdm).forEach(k=>{if(typeof cdm[k].sum!=='undefined')cdm[k]={avg:+(cdm[k].sum/cdm[k].cnt).toFixed(1)}});
+  }
+  const cdl=Object.entries(cdm).map(([k,v])=>({cat:k,avg:v.avg||0})).sort((a,b)=>b.avg-a.avg).slice(0,10);
   rebuildChart('cat-digest-bar',{type:'bar',data:{labels:cdl.map(c=>c.cat),datasets:[{data:cdl.map(c=>c.avg),backgroundColor:cdl.map(c=>dCol(c.avg)+'CC'),borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{min:0,max:100,ticks:{callback:v=>v+'%'},grid:{color:'#F0F4F8'}},y:{grid:{display:false}}}}});
 }
 function productPage(dir){productPage_+=dir;renderProductTable()}
@@ -1455,46 +1467,41 @@ function renderMonthlySales() {
   // _source_dateから月別集計（RAWデータの場合は日付情報がないため、dailyデータから月別に集計）
   // BigQueryデータがある場合はrows、ない場合はRAW.dailyから推定
   
-  // 月別集計用：RAW.daily は日別データを持っている
-  // まず現在の期間中心に±5ヶ月の12ヶ月を表示
-  const daily = RAW.daily || [];
+  // BigQueryから取得した月別データを優先、なければdailyから集計
+  let months, labels, salesData;
   
-  // 月別に集計
-  const monthMap = {};
-  daily.forEach(d => {
-    // day は "MM/DD" 形式
-    const m = d.day ? d.day.split('/')[0] : null;
-    if (!m) return;
-    const key = '2026/' + m;
-    if (!monthMap[key]) monthMap[key] = { sales: 0, label: m + '月' };
-    monthMap[key].sales += (d['売上'] || 0);
-  });
-
-  // BigQueryのrowsデータから月別集計（_source_dateベース）
-  // ライブデータがある場合はこちらを使う
-  const monthMapLive = {};
-  if (isLiveMode && rows.length > 0) {
-    // rowsには日付情報がないのでdailyデータを優先
+  if (RAW.monthly && RAW.monthly.length > 0) {
+    // BigQueryの月別データを使用
+    months = RAW.monthly.map(r => r.month);
+    labels = months.map(m => {
+      const parts = m.split('-');
+      return parts[0] + '/' + parts[1].replace(/^0/,'') + '月';
+    });
+    salesData = RAW.monthly.map(r => r.sales);
+  } else {
+    // フォールバック：dailyデータから月別集計
+    const daily = RAW.daily || [];
+    const monthMap = {};
+    daily.forEach(d => {
+      const m = d.day ? d.day.split('/')[0] : null;
+      if (!m) return;
+      const key = '2026-' + m.padStart(2,'0');
+      if (!monthMap[key]) monthMap[key] = { sales: 0, label: '2026/' + m + '月' };
+      monthMap[key].sales += (d['売上'] || 0);
+    });
+    months = Object.keys(monthMap).sort();
+    labels = months.map(k => monthMap[k].label);
+    salesData = months.map(k => monthMap[k].sales);
   }
 
-  const months = Object.keys(monthMap).sort();
-  const labels = months.map(k => monthMap[k].label);
-  const salesData = months.map(k => monthMap[k].sales);
-
   // 選択中の月をハイライト
-  const selectedMonth = dpState.applied.start ? 
-    String(dpState.applied.start.getMonth() + 1).padStart(2,'0') : null;
+  const selectedMonth = dpState.applied.end ? 
+    dpState.applied.end.getFullYear() + '-' + String(dpState.applied.end.getMonth() + 1).padStart(2,'0') : null;
 
-  const colors = labels.map((l, i) => {
-    const m = months[i].split('/')[1];
-    return m === selectedMonth ? P.teal + 'FF' : P.teal + '66';
-  });
-
-  // 前年データ（比較期間）
-  const prevData = salesData.map(s => s * 0.92); // デモ用
+  const colors = months.map(m => m === selectedMonth ? P.teal + 'FF' : P.teal + '77');
 
   const label = dpState.applied.start ? 
-    `${dpState.applied.start.getFullYear()}年 月別推移` : '';
+    `${dpState.applied.end ? dpState.applied.end.getFullYear() : ''}年 月別推移（過去12ヶ月）` : '';
   const labelEl = document.getElementById('monthly-period-label');
   if (labelEl) labelEl.textContent = label;
 
@@ -1511,9 +1518,9 @@ function renderMonthlySales() {
           borderSkipped: false,
           order: 2
         },
-        ...(dpState.applied.compareOn ? [{
+        ...(dpState.applied.compareOn && RAW.monthly ? [{
           label: '前年売上',
-          data: prevData,
+          data: salesData.map(s => s * 0.92), // TODO: 前年データをBigQueryから取得
           backgroundColor: 'rgba(124,58,237,.2)',
           borderColor: 'rgba(124,58,237,.5)',
           borderWidth: 1,
@@ -2153,8 +2160,17 @@ async function loadBigQueryData() {
       Number(r.net_sales    ?? 0),
       Number(r.gross_profit ?? 0),
       Number(r.qty_sold     ?? 0),
-      r.category1_name ?? 'TRION',  // index 7: brand
+      r.category1_name ?? 'TRION',  // index 7: brand (from v_sales_unified)
     ]);
+
+    // 月別売上データ更新
+    if (data.monthly && data.monthly.length > 0) {
+      RAW.monthly = data.monthly.map(r => ({
+        month: r.month,
+        sales: Number(r.sales ?? 0),
+        gross_profit: Number(r.gross_profit ?? 0),
+      }));
+    }
 
     RAW.skus = data.skus.map(r => [
       r.product_code  ?? '',
