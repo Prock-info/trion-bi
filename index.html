@@ -1324,7 +1324,17 @@ function fmtM(n){
 function grClass(v){return v>=65?'gr-h':v>=55?'gr-m':'gr-l'}
 function dCol(v){return v>=80?'#16A34A':v>=40?P.amber:P.red}
 function pill(ch){const m={'EC':'pill-ec','直営店':'pill-store','卸/BtoB':'pill-btob','POPUP/百貨店':'pill-popup','Amazon':'pill-amz'};return m[ch]||''}
-function rebuildChart(id,cfg){const el=document.getElementById(id);if(!el)return;if(charts[id])charts[id].destroy();charts[id]=new Chart(el,cfg)}
+function rebuildChart(id,cfg){
+  const el=document.getElementById(id);if(!el)return;
+  if(charts[id])charts[id].destroy();
+  if(cfg.type==='doughnut'&&cfg.options&&cfg.options.responsive===false){
+    // 固定サイズを確実に適用
+    const w=el.style.width||el.getAttribute('width')||'130px';
+    const h=el.style.height||el.getAttribute('height')||'130px';
+    el.style.cssText=`width:${w};height:${h};max-width:${w};max-height:${h}`;
+  }
+  charts[id]=new Chart(el,cfg);
+}
 function diffHtml(a,b){if(!b) return '';const d=((a-b)/Math.abs(b)*100);if(Math.abs(d)<0.1) return `<span style="font-size:10px;color:var(--text3)">±0%</span>`;return d>0?`<span style="font-size:10px;color:#16A34A">▲${d.toFixed(1)}%</span>`:`<span style="font-size:10px;color:var(--red)">▼${Math.abs(d).toFixed(1)}%</span>`}
 
 function aggRows(rows){
@@ -1569,7 +1579,7 @@ function renderProductTable(){
     const col=dCol(d);
     const inv=r[SI];
     const invDisp=inv<0?`<span style="color:var(--red)">${fmt(inv)}</span>`:fmt(inv);
-    return`<tr style="cursor:pointer" onclick="openProductModal('${r[SK]}',this)" ><td class="rank ${start+i<3?'top3':''}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500">${r[SH]}</td><td style="font-size:11px">${r[SN]}</td><td><span style="font-size:10px;color:var(--text3)">${r[SCAT]}</span></td><td style="font-size:10px;color:var(--text3)">${r[SSON]}</td><td class="num">¥${fmt(r[SS])}</td><td class="num">¥${fmt(r[SG])}</td><td class="num ${grClass(parseFloat(r[SGR]||0))}">${parseFloat(r[SGR]||0).toFixed(1)}%</td><td class="num">${r[SQ]}</td><td class="num">${invDisp}</td><td><div class="digest"><div class="digest-bar"><div class="digest-fill" style="width:${d}%;background:${col}"></div></div><span style="font-size:10px;color:${col};min-width:36px;font-weight:500">${r[SD]}%</span></div></td><td class="num muted">¥${fmt(r[SP])}</td></tr>`;
+    return`<tr style="cursor:pointer" onclick="openProductModal('${r[SK]}',this)" ><td class="rank ${start+i<3?'top3':''}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500">${r[SH]}</td><td style="font-size:11px">${r[SN]}</td><td><span style="font-size:10px;color:var(--text3)">${r[SCAT]}</span></td><td style="font-size:10px;color:var(--text3)">${r[SSON]}</td><td class="num">¥${fmt(r[SS])}</td><td class="num">¥${fmt(r[SG])}</td><td class="num ${grClass(parseFloat(r[SGR]||0))}">${parseFloat(r[SGR]||0).toFixed(1)}%</td><td class="num">${r[SQ]}</td><td class="num">${invDisp}</td><td><div class="digest"><div class="digest-bar"><div class="digest-fill" style="width:${d}%;background:${col}"></div></div><span style="font-size:10px;color:${col};min-width:36px;font-weight:500">${parseFloat(r[SD]||0).toFixed(1)}%</span></div></td><td class="num muted">¥${fmt(r[SP])}</td></tr>`;
   }).join('');
   document.getElementById('p-info').textContent=`${start+1}〜${end} / ${total}件`;
   document.getElementById('p-prev').disabled=productPage_===0;
