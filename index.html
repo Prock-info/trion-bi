@@ -1474,7 +1474,7 @@ function renderProductTable(){
     const col=dCol(d);
     const inv=r[SI];
     const invDisp=inv<0?`<span style="color:var(--red)">${fmt(inv)}</span>`:fmt(inv);
-    return`<tr style="cursor:pointer" onclick="openProductModal('${r[SK]}','${r[SN].replace(/'/g,\"\'\")}')" ><td class="rank ${start+i<3?'top3':''}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500">${r[SH]}</td><td style="font-size:11px">${r[SN]}</td><td><span style="font-size:10px;color:var(--text3)">${r[SCAT]}</span></td><td style="font-size:10px;color:var(--text3)">${r[SSON]}</td><td class="num">¥${fmt(r[SS])}</td><td class="num">¥${fmt(r[SG])}</td><td class="num ${grClass(r[SGR])}">${r[SGR]}%</td><td class="num">${r[SQ]}</td><td class="num">${invDisp}</td><td><div class="digest"><div class="digest-bar"><div class="digest-fill" style="width:${d}%;background:${col}"></div></div><span style="font-size:10px;color:${col};min-width:36px;font-weight:500">${r[SD]}%</span></div></td><td class="num muted">¥${fmt(r[SP])}</td></tr>`;
+    return`<tr style="cursor:pointer" onclick="openProductModal('${r[SK]}',this)" ><td class="rank ${start+i<3?'top3':''}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500">${r[SH]}</td><td style="font-size:11px">${r[SN]}</td><td><span style="font-size:10px;color:var(--text3)">${r[SCAT]}</span></td><td style="font-size:10px;color:var(--text3)">${r[SSON]}</td><td class="num">¥${fmt(r[SS])}</td><td class="num">¥${fmt(r[SG])}</td><td class="num ${grClass(r[SGR])}">${r[SGR]}%</td><td class="num">${r[SQ]}</td><td class="num">${invDisp}</td><td><div class="digest"><div class="digest-bar"><div class="digest-fill" style="width:${d}%;background:${col}"></div></div><span style="font-size:10px;color:${col};min-width:36px;font-weight:500">${r[SD]}%</span></div></td><td class="num muted">¥${fmt(r[SP])}</td></tr>`;
   }).join('');
   document.getElementById('p-info').textContent=`${start+1}〜${end} / ${total}件`;
   document.getElementById('p-prev').disabled=productPage_===0;
@@ -1670,7 +1670,11 @@ function renderProductPortfolio() {
 // =====================================================================
 // 店舗別販売数モーダル
 // =====================================================================
-function openProductModal(productCode, productName) {
+function openProductModal(productCode, el) {
+  // elがDOM要素の場合は行から商品名を取得、文字列の場合はそのまま使う
+  const productName = (el && typeof el !== 'string') 
+    ? el.querySelector('td:nth-child(3)').textContent 
+    : (el || productCode);
   document.getElementById('modal-product-name').textContent = productName || productCode;
   document.getElementById('modal-product-code').textContent = '商品コード: ' + productCode;
   
