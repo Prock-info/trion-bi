@@ -644,6 +644,13 @@ canvas { display:block; }
       <tbody id="ch-tbl"></tbody></table>
     </div>
   </div>
+  <div class="card mb">
+    <div class="card-title">
+      年間 月別売上推移
+      <span class="card-sub" id="monthly-period-label"></span>
+    </div>
+    <div style="height:200px"><canvas id="monthly-bar"></canvas></div>
+  </div>
 </div>
 
 <!-- ====== CHANNEL ====== -->
@@ -660,7 +667,7 @@ canvas { display:block; }
 <!-- ====== MD ====== -->
 <div id="tab-md" class="tab-content page">
   <div class="row2">
-    <div class="card"><div class="card-title">カテゴリ別 売上 / 粗利</div><div style="height:280px"><canvas id="md-cat-bar"></canvas></div></div>
+    <div class="card"><div class="card-title">カテゴリ別 売上 / 粗利 / 在庫</div><div style="height:280px"><canvas id="md-cat-bar"></canvas></div></div>
     <div class="card"><div class="card-title">カテゴリ別 粗利率ランキング</div><div class="bar-list" id="cat-rate-list"></div></div>
   </div>
   <div class="card mb"><div class="card-title">シリーズ別 売上 <span class="card-sub">TOP10</span></div><div style="height:200px"><canvas id="series-bar"></canvas></div></div>
@@ -1253,7 +1260,12 @@ function resetFilters(){
 // HELPERS
 // =====================================================================
 function fmt(n){return Math.round(n).toLocaleString('ja-JP')}
-function fmtM(n){return(n/1e6).toFixed(2)+'M'}
+function fmtM(n){
+  const abs=Math.abs(n);
+  if(abs>=1e8) return(n/1e8).toFixed(1)+'億';
+  if(abs>=1e4) return Math.round(n/1e4).toLocaleString('ja-JP')+'万';
+  return Math.round(n).toLocaleString('ja-JP');
+}
 function grClass(v){return v>=65?'gr-h':v>=55?'gr-m':'gr-l'}
 function dCol(v){return v>=80?'#16A34A':v>=40?P.amber:P.red}
 function pill(ch){const m={'EC':'pill-ec','直営店':'pill-store','卸/BtoB':'pill-btob','POPUP/百貨店':'pill-popup','Amazon':'pill-amz'};return m[ch]||''}
@@ -1319,11 +1331,13 @@ function renderSummary(){
 
   // Brand chart
   renderBrandSummary();
+  // Monthly chart
+  renderMonthlySales();
 
   // Ch table
   const cmpColVisible=cmpOn;
   document.getElementById('ch-tbl').innerHTML=cl.map(c=>{
-    const gr2=(c[1].g/c[1].s*100).toFixed(1);
+    const gr2=c[1].s>0?(c[1].g/c[1].s*100).toFixed(1):'0.0';
     const cmpSalesTd=cmpColVisible?`<td class="num cmp-val">¥${fmtM(c[1].s*0.92)}</td>`:'';
     return`<tr><td><span class="pill ${pill(c[0])}">${c[0]}</span></td><td class="num">¥${fmtM(c[1].s)}</td>${cmpSalesTd}<td class="num">¥${fmtM(c[1].g)}</td><td class="num ${grClass(gr2)}">${gr2}%</td></tr>`;
   }).join('');
@@ -1349,7 +1363,18 @@ function renderMD(){
   const rows=filteredRows;
   const cm={};rows.forEach(r=>{if(!cm[r[RCAT]])cm[r[RCAT]]={s:0,g:0};cm[r[RCAT]].s+=r[RS];cm[r[RCAT]].g+=r[RG]});
   const cats=Object.entries(cm).filter(c=>c[1].s>0).sort((a,b)=>b[1].s-a[1].s).slice(0,10);
-  rebuildChart('md-cat-bar',{type:'bar',data:{labels:cats.map(c=>c[0]),datasets:[{label:'売上',data:cats.map(c=>c[1].s),backgroundColor:P.teal+'CC',borderRadius:4,borderSkipped:false},{label:'粗利',data:cats.map(c=>c[1].g),backgroundColor:P.lime+'AA',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:8,padding:10}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>'¥'+Math.round(v/1e6)+'M'},grid:{color:'#F0F4F8'}}}}});
+  // カテゴリ別在庫金額（INVデータから）
+  const invCatMap = {};
+  if (INV && INV.catInv) {
+    INV.catInv.forEach(r => { invCatMap[r.category_name] = Number(r.stock_value || 0); });
+  }
+  const invData = cats.map(c => invCatMap[c[0]] || 0);
+  
+  rebuildChart('md-cat-bar',{type:'bar',data:{labels:cats.map(c=>c[0]),datasets:[
+    {label:'売上',data:cats.map(c=>c[1].s),backgroundColor:P.teal+'CC',borderRadius:4,borderSkipped:false},
+    {label:'粗利',data:cats.map(c=>c[1].g),backgroundColor:P.lime+'AA',borderRadius:4,borderSkipped:false},
+    {label:'在庫金額',data:invData,backgroundColor:P.amber+'88',borderRadius:4,borderSkipped:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:8,padding:10}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'}}}}});
   const sorted=[...cats].sort((a,b)=>b[1].g/b[1].s-a[1].g/a[1].s);
   document.getElementById('cat-rate-list').innerHTML=sorted.map(c=>{const r=(c[1].g/c[1].s*100).toFixed(1);const col=r>=70?P.teal:r>=60?P.amber:P.gray2;return`<div class="bar-row"><div class="bar-lbl">${c[0]}</div><div class="bar-track"><div class="bar-fill" style="width:${r}%;background:${col}"></div></div><div class="bar-cnt" style="color:${col}">${r}%</div></div>`}).join('');
   const sm={};rows.forEach(r=>{if(!sm[r[RSER]])sm[r[RSER]]=0;sm[r[RSER]]+=r[RS]});
@@ -1420,6 +1445,97 @@ function renderStatic(){
   rebuildChart('amz-bar',{type:'bar',data:{labels:amz.map(r=>r.m),datasets:[{data:amz.map(r=>r.s),backgroundColor:P.teal+'88',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>'¥'+Math.round(v/1e4)+'万'},grid:{color:'#F0F4F8'}}}}});
 }
 
+
+
+// =====================================================================
+// 月別売上推移（SUMMARY）
+// =====================================================================
+function renderMonthlySales() {
+  const rows = filteredRows;
+  // _source_dateから月別集計（RAWデータの場合は日付情報がないため、dailyデータから月別に集計）
+  // BigQueryデータがある場合はrows、ない場合はRAW.dailyから推定
+  
+  // 月別集計用：RAW.daily は日別データを持っている
+  // まず現在の期間中心に±5ヶ月の12ヶ月を表示
+  const daily = RAW.daily || [];
+  
+  // 月別に集計
+  const monthMap = {};
+  daily.forEach(d => {
+    // day は "MM/DD" 形式
+    const m = d.day ? d.day.split('/')[0] : null;
+    if (!m) return;
+    const key = '2026/' + m;
+    if (!monthMap[key]) monthMap[key] = { sales: 0, label: m + '月' };
+    monthMap[key].sales += (d['売上'] || 0);
+  });
+
+  // BigQueryのrowsデータから月別集計（_source_dateベース）
+  // ライブデータがある場合はこちらを使う
+  const monthMapLive = {};
+  if (isLiveMode && rows.length > 0) {
+    // rowsには日付情報がないのでdailyデータを優先
+  }
+
+  const months = Object.keys(monthMap).sort();
+  const labels = months.map(k => monthMap[k].label);
+  const salesData = months.map(k => monthMap[k].sales);
+
+  // 選択中の月をハイライト
+  const selectedMonth = dpState.applied.start ? 
+    String(dpState.applied.start.getMonth() + 1).padStart(2,'0') : null;
+
+  const colors = labels.map((l, i) => {
+    const m = months[i].split('/')[1];
+    return m === selectedMonth ? P.teal + 'FF' : P.teal + '66';
+  });
+
+  // 前年データ（比較期間）
+  const prevData = salesData.map(s => s * 0.92); // デモ用
+
+  const label = dpState.applied.start ? 
+    `${dpState.applied.start.getFullYear()}年 月別推移` : '';
+  const labelEl = document.getElementById('monthly-period-label');
+  if (labelEl) labelEl.textContent = label;
+
+  rebuildChart('monthly-bar', {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { 
+          label: '売上', 
+          data: salesData, 
+          backgroundColor: colors,
+          borderRadius: 4, 
+          borderSkipped: false,
+          order: 2
+        },
+        ...(dpState.applied.compareOn ? [{
+          label: '前年売上',
+          data: prevData,
+          backgroundColor: 'rgba(124,58,237,.2)',
+          borderColor: 'rgba(124,58,237,.5)',
+          borderWidth: 1,
+          borderRadius: 4,
+          borderSkipped: false,
+          order: 3
+        }] : [])
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { 
+        legend: { position: 'top', labels: { boxWidth: 8, padding: 12 } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtM(ctx.raw) } }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { ticks: { callback: v => fmtM(v) }, grid: { color: '#F0F4F8' } }
+      }
+    }
+  });
+}
 
 // =====================================================================
 // ブランド別（SUMMARY）
