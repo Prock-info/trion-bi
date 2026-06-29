@@ -2081,9 +2081,10 @@ async function loadLatestPeriod() {
     if (!data.ok || !data.latest_date) return;
 
     // 最新日付から「その月の1日〜末日」を期間として設定
-    const latest = new Date(data.latest_date);
-    const y = latest.getFullYear();
-    const m = latest.getMonth();
+    // latest_date は "2026-05-31" 形式
+    const parts = String(data.latest_date).split('-');
+    const y = parseInt(parts[0]);
+    const m = parseInt(parts[1]) - 1; // 0-based month
     const firstDay = new Date(y, m, 1);
     const lastDay  = new Date(y, m + 1, 0);
 
@@ -2116,13 +2117,14 @@ async function loadLatestPeriod() {
 
   } catch(e) {
     console.warn('最新期間の取得に失敗:', e);
-    // フォールバック：先月を設定
-    const t = new Date();
-    const firstDay = new Date(t.getFullYear(), t.getMonth() - 1, 1);
-    const lastDay  = new Date(t.getFullYear(), t.getMonth(), 0);
+    // フォールバック：2026年5月（最新データ月）を設定
+    const firstDay = new Date(2026, 4, 1);  // 5月1日
+    const lastDay  = new Date(2026, 5, 0);  // 5月31日
     dpState.start = firstDay;
     dpState.end   = lastDay;
     dpState.applied = { start: firstDay, end: lastDay, compareOn: false, cmpStart: null, cmpEnd: null };
+    document.getElementById('dp-trigger-text').textContent = '5/1 → 5/31';
+    document.getElementById('hero-period-label').textContent = '2026年5月1日 〜 2026年5月31日';
   }
 }
 
