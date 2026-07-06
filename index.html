@@ -1418,25 +1418,75 @@ function renderChannel(){
   rebuildChart('ch-gross-bar',{type:'bar',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>+(c[1].g/c[1].s*100).toFixed(1)),backgroundColor:cl.map(c=>P.ch[c[0]]),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:20,max:80,ticks:{callback:v=>v+'%'},grid:{color:'#F0F4F8'}},x:{grid:{display:false}}}}});
   document.getElementById('client-tbl').innerHTML=cl.map((c,i)=>`<tr><td class=\"rank ${i<3?'top3':''}\">${ i+1}</td><td style=\"font-size:11px\">${c[0]}</td><td><span class=\"pill ${pill(c[0])}\">${c[0]}</span></td><td class=\"num\">¥${fmtM(c[1].s)}</td><td class=\"num\">¥${fmtM(c[1].g)}</td><td class=\"num ${grClass(c[1].g/c[1].s*100)}\">${(c[1].g/c[1].s*100).toFixed(1)}%</td></tr>`).join('');
   const days=RAW.daily;
-  rebuildChart('daily-bar',{
-    type:'bar',
-    data:{
-      labels:days.map(d=>d.day),
-      datasets:[
-        {label:'売上',data:days.map(d=>d['売上']),backgroundColor:P.teal+'99',borderRadius:3,borderSkipped:false,yAxisID:'y',order:2},
-        {label:'取引数',data:days.map(d=>d['取引数']||0),type:'line',borderColor:P.amber,backgroundColor:'transparent',tension:0.3,yAxisID:'y2',order:1,pointRadius:3}
-      ]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{boxWidth:8,padding:10}}},
-      scales:{
-        x:{grid:{display:false},ticks:{font:{size:9}}},
-        y:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'},position:'left'},
-        y2:{ticks:{callback:v=>v+'件'},grid:{drawOnChartArea:false},position:'right'}
+  // スマレジ店舗別日別グラフ
+  const smaData = RAW.smaDaily || [];
+  const storeColors = { 'FLAGSHIP SHOP': P.teal+'BB', 'TRION日本橋店': P.blue+'BB', '不明': P.gray+'BB' };
+  const stores = [...new Set(smaData.map(d => d.store_name))].sort();
+  const allDays = [...new Set(smaData.map(d => d.day))].sort();
+
+  if (allDays.length > 0 && stores.length > 0) {
+    // 店舗別データセット
+    const smaDatasets = stores.map(store => ({
+      label: store,
+      data: allDays.map(day => {
+        const row = smaData.find(d => d.day === day && d.store_name === store);
+        return row ? row.sales : 0;
+      }),
+      backgroundColor: storeColors[store] || P.gray+'BB',
+      borderRadius: 3,
+      borderSkipped: false,
+      stack: 'store',
+      yAxisID: 'y',
+      order: 2,
+    }));
+    // 取引数折れ線
+    const txDataset = {
+      label: '取引数(合計)',
+      type: 'line',
+      data: allDays.map(day => smaData.filter(d => d.day === day).reduce((s,d) => s + d.transactions, 0)),
+      borderColor: P.amber,
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      yAxisID: 'y2',
+      order: 1,
+      pointRadius: 3,
+    };
+    rebuildChart('daily-bar', {
+      type: 'bar',
+      data: { labels: allDays, datasets: [...smaDatasets, txDataset] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 8, padding: 8 } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 9 } }, stacked: true },
+          y: { ticks: { callback: v => fmtM(v) }, grid: { color: '#F0F4F8' }, stacked: true },
+          y2: { ticks: { callback: v => v+'件' }, grid: { drawOnChartArea: false }, position: 'right' }
+        }
       }
-    }
-  });
+    });
+  } else {
+    // フォールバック：RAW.dailyから
+    const days = RAW.daily || [];
+    rebuildChart('daily-bar',{
+      type:'bar',
+      data:{
+        labels:days.map(d=>d.day),
+        datasets:[
+          {label:'売上',data:days.map(d=>d['売上']),backgroundColor:P.teal+'99',borderRadius:3,borderSkipped:false,yAxisID:'y',order:2},
+          {label:'取引数',data:days.map(d=>d['取引数']||0),type:'line',borderColor:P.amber,backgroundColor:'transparent',tension:0.3,yAxisID:'y2',order:1,pointRadius:3}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',labels:{boxWidth:8,padding:10}}},
+        scales:{
+          x:{grid:{display:false},ticks:{font:{size:9}}},
+          y:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'},position:'left'},
+          y2:{ticks:{callback:v=>v+'件'},grid:{drawOnChartArea:false},position:'right'}
+        }
+      }
+    });
+  }
 }
 
 // =====================================================================
@@ -2555,6 +2605,16 @@ async function loadBigQueryData() {
       売上:  Number(r.sales        ?? 0),
       取引数: Number(r.transactions ?? 0),
     }));
+
+    // スマレジ店舗別日別データ
+    if (data.smaDaily && data.smaDaily.length > 0) {
+      RAW.smaDaily = data.smaDaily.map(r => ({
+        day:        r.day,
+        store_name: r.store_name,
+        sales:      Number(r.sales        ?? 0),
+        transactions: Number(r.transactions ?? 0),
+      }));
+    }
 
     // フィルタ選択肢を更新
     const cats = [...new Set(RAW.rows.map(r=>r[RC+2]).filter(Boolean))].sort();
