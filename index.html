@@ -1938,6 +1938,107 @@ let STOREC = null;       // 直営×EC 実データキャッシュ
 let storecLoaded = false;
 let storecLoadedPeriod = null; // 期間が変わったか判定用
 
+// 明細行(storeRows/ecRows)からダッシュボード表示用の集計形に変換する。
+// BigQuery側のジョブ数を減らして表示を高速化するため、
+// 日別/時間帯別/決済方法別...の集計はここ(フロント側JS)で行う。
+function computeStorecAggregates(storeRows, ecRows) {
+  storeRows = storeRows || [];
+  ecRows    = ecRows    || [];
+
+  // ---- 直営店：取引(transaction_id)単位に集約 ----
+  const txMap = {};
+  storeRows.forEach(r => {
+    const tx = r.transaction_id;
+    if (!txMap[tx]) txMap[tx] = { day: r.day, hour: Number(r.hour), date_key: r.date_key, member_code: r.member_code, total: 0 };
+    txMap[tx].total += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
+  });
+  const txList = Object.values(txMap);
+  const customers      = txList.length;
+  const sales          = txList.reduce((s,t) => s + t.total, 0);
+  const memberTxList   = txList.filter(t => t.member_code);
+  const memberCustomers = memberTxList.length;
+  const memberSales     = memberTxList.reduce((s,t) => s + t.total, 0);
+  const nonmemberSales  = sales - memberSales;
+  const nonmemberTx     = customers - memberCustomers;
+
+  const storeDailyMap = {};
+  txList.forEach(t => {
+    if (!storeDailyMap[t.date_key]) storeDailyMap[t.date_key] = { day: t.day, date_key: t.date_key, customers: 0, sales: 0 };
+    storeDailyMap[t.date_key].customers++;
+    storeDailyMap[t.date_key].sales += t.total;
+  });
+  const storeDaily = Object.values(storeDailyMap).sort((a,b) => a.date_key < b.date_key ? -1 : 1);
+
+  const storeHourlyMap = {};
+  txList.forEach(t => {
+    if (!storeHourlyMap[t.hour] && storeHourlyMap[t.hour] !== 0) storeHourlyMap[t.hour] = 0;
+    storeHourlyMap[t.hour] = (storeHourlyMap[t.hour] || 0) + 1;
+  });
+  const storeHourly = Object.keys(storeHourlyMap).map(h => ({ hour: Number(h), customers: storeHourlyMap[h] })).sort((a,b) => a.hour - b.hour);
+
+  const storeProdMap = {};
+  storeRows.forEach(r => {
+    const name = r.product_name || '';
+    if (!storeProdMap[name]) storeProdMap[name] = { product_name: name, sales: 0, qty: 0 };
+    storeProdMap[name].sales += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
+    storeProdMap[name].qty   += Number(r.qty || 0);
+  });
+  const storeProd = Object.values(storeProdMap).sort((a,b) => b.sales - a.sales).slice(0, 10);
+
+  // ---- EC：受注(order_code)単位に集約 ----
+  const orderMap = {};
+  ecRows.forEach(r => {
+    const oc = r.order_code;
+    if (!orderMap[oc]) orderMap[oc] = {
+      grand_total: Number(r.grand_total || 0),
+      purchase_count: Number(r.purchase_count || 0),
+      payment_method: r.payment_method || '不明',
+      member_rank: r.member_rank || '不明',
+      day: r.day, date_key: r.date_key,
+    };
+  });
+  const orderList = Object.values(orderMap);
+  const orders     = orderList.length;
+  const ecSales    = orderList.reduce((s,o) => s + o.grand_total, 0);
+  const newOrders  = orderList.filter(o => o.purchase_count === 1).length;
+
+  const ecDailyMap = {};
+  orderList.forEach(o => {
+    if (!ecDailyMap[o.date_key]) ecDailyMap[o.date_key] = { day: o.day, date_key: o.date_key, orders: 0, sales: 0 };
+    ecDailyMap[o.date_key].orders++;
+    ecDailyMap[o.date_key].sales += o.grand_total;
+  });
+  const ecDaily = Object.values(ecDailyMap).sort((a,b) => a.date_key < b.date_key ? -1 : 1);
+
+  const payMap = {};
+  orderList.forEach(o => { payMap[o.payment_method] = (payMap[o.payment_method] || 0) + 1; });
+  const ecPayment = Object.entries(payMap).map(([payment_method, cnt]) => ({ payment_method, cnt })).sort((a,b) => b.cnt - a.cnt);
+
+  const newCnt    = newOrders;
+  const repeatCnt = orders - newOrders;
+  const ecNewRepeat = [{ kind: '新規', cnt: newCnt }, { kind: 'リピート', cnt: repeatCnt }];
+
+  const stageMap = {};
+  orderList.forEach(o => { stageMap[o.member_rank] = (stageMap[o.member_rank] || 0) + 1; });
+  const ecMemberStage = Object.entries(stageMap).map(([member_rank, cnt]) => ({ member_rank, cnt })).sort((a,b) => b.cnt - a.cnt);
+
+  const ecProdMap = {};
+  ecRows.forEach(r => {
+    const name = r.product_name || '';
+    if (!ecProdMap[name]) ecProdMap[name] = { product_name: name, sales: 0 };
+    ecProdMap[name].sales += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
+  });
+  const ecProd = Object.values(ecProdMap).sort((a,b) => b.sales - a.sales).slice(0, 10);
+
+  return {
+    storeKpi:      { customers, sales, member_customers: memberCustomers },
+    storeDaily, storeHourly, storeProd,
+    storeMember:   { member_tx: memberCustomers, member_sales: memberSales, nonmember_tx: nonmemberTx, nonmember_sales: nonmemberSales },
+    ecKpi:         { orders, sales: ecSales, new_orders: newOrders },
+    ecDaily, ecPayment, ecNewRepeat, ecMemberStage, ecProd,
+  };
+}
+
 async function loadStorecData() {
   if (!SESSION_TOKEN) return;
   const fmtD = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
@@ -1956,7 +2057,7 @@ async function loadStorecData() {
     const url  = `${GAS_URL}?action=storec&token=${encodeURIComponent(SESSION_TOKEN)}&start=${start}&end=${end}`;
     const data = await jsonp(url);
     if (!data.ok) throw new Error(data.error);
-    STOREC = data;
+    STOREC = computeStorecAggregates(data.storeRows, data.ecRows);
     storecLoaded = true;
     storecLoadedPeriod = periodKey;
     renderStorecTab();
