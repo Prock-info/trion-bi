@@ -1934,56 +1934,87 @@ function renderBrandSummary() {
 // =====================================================================
 // 直営×ECタブ
 // =====================================================================
-const SC_STORE = {
-  daily: [
-    {d:'05/01',s:136990,c:4},{d:'05/02',s:226067,c:9},{d:'05/03',s:72500,c:3},
-    {d:'05/04',s:426979,c:13},{d:'05/05',s:97450,c:2},{d:'05/06',s:156900,c:4},
-    {d:'05/07',s:105522,c:3},{d:'05/08',s:169004,c:8},{d:'05/09',s:133989,c:4},
-    {d:'05/10',s:38550,c:2},{d:'05/12',s:57700,c:2},{d:'05/13',s:110600,c:3},
-    {d:'05/14',s:123910,c:4},{d:'05/15',s:115270,c:5},{d:'05/16',s:26755,c:2},
-    {d:'05/17',s:42900,c:1},{d:'05/19',s:102079,c:5},{d:'05/20',s:6182,c:2},
-    {d:'05/21',s:62150,c:1},{d:'05/22',s:136510,c:5},{d:'05/23',s:64997,c:3},
-    {d:'05/24',s:287350,c:6},{d:'05/26',s:32340,c:2},{d:'05/27',s:31900,c:1},
-    {d:'05/28',s:153500,c:3}
-  ],
-  hourly: [
-    {h:10,c:2},{h:11,c:13},{h:12,c:26},{h:13,c:10},{h:14,c:16},
-    {h:15,c:9},{h:16,c:8},{h:17,c:8},{h:18,c:2},{h:19,c:3}
-  ],
-  products: [
-    {n:'GLB123 Tan',s:150000,q:1},{n:'GLB123 Black',s:150000,q:1},{n:'GLB113 Black',s:150000,q:1},
-    {n:'DPC280M Honeybeige',s:105546,q:2},{n:'GLB102(LA) R.Blue x White',s:102092,q:2},
-    {n:'GA134 Tan',s:99546,q:1},{n:'GLB102(HT) Black x Yellow',s:99546,q:1},
-    {n:'DPC265R Black',s:97546,q:2},{n:'GLA801V Black',s:95300,q:3},
-    {n:'GLB109(NY) Navy x Gray',s:92500,q:2}
-  ]
-};
-const SC_EC = {
-  daily: [
-    {d:'05/19',s:538440,c:15},{d:'05/20',s:592905,c:17},{d:'05/21',s:470423,c:18},
-    {d:'05/22',s:400780,c:11},{d:'05/23',s:450192,c:15},{d:'05/24',s:1447405,c:31},
-    {d:'05/25',s:567629,c:18},{d:'05/26',s:611220,c:18}
-  ],
-  payment: {'クレジットカード':56,'Amazon Pay':38,'代金引換':23,'銀行振込':17,'PayPay':9},
-  member_stage: {'ブロンズ':19,'シルバー':6,'ゴールド':2,'プラチナ':1},
-  products: [
-    {n:'Gボディバッグ ドジャースモデル',s:324800},{n:'読売GコラボGリュック',s:224000},
-    {n:'読売GコラボGミニトート',s:210800},{n:'阪神TコラボGボディバッグ',s:210000},
-    {n:'GミニトートドジャースM',s:180800},{n:'読売GコラボGボディバッグ',s:140800},
-    {n:'グローブボディバッグ',s:128000},{n:'トート横型',s:108000},
-    {n:'GミニトートヤンキースM',s:108000},{n:'トート横型 マルチ',s:108000}
-  ]
-};
+let STOREC = null;       // 直営×EC 実データキャッシュ
+let storecLoaded = false;
+let storecLoadedPeriod = null; // 期間が変わったか判定用
+
+async function loadStorecData() {
+  if (!SESSION_TOKEN) return;
+  const fmtD = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const start = fmtD(dpState.applied.start);
+  const end   = fmtD(dpState.applied.end);
+  const periodKey = start + '_' + end;
+
+  if (storecLoaded && storecLoadedPeriod === periodKey) {
+    renderStorecTab();
+    return;
+  }
+
+  const tabEl = document.getElementById('tab-storec');
+  tabEl.style.opacity = '0.5';
+  try {
+    const url  = `${GAS_URL}?action=storec&token=${encodeURIComponent(SESSION_TOKEN)}&start=${start}&end=${end}`;
+    const data = await jsonp(url);
+    if (!data.ok) throw new Error(data.error);
+    STOREC = data;
+    storecLoaded = true;
+    storecLoadedPeriod = periodKey;
+    renderStorecTab();
+  } catch(e) {
+    console.error('直営×ECデータ取得エラー:', e);
+  } finally {
+    tabEl.style.opacity = '1';
+  }
+}
 
 function renderStorecTab() {
-  // 直営店 日別
+  if (!STOREC) return;
+
+  const k  = STOREC.storeKpi || {};
+  const ek = STOREC.ecKpi    || {};
+
+  // ---- KPIカード（直営店）----
+  const customers  = Number(k.customers || 0);
+  const sales      = Number(k.sales || 0);
+  const memberCust = Number(k.member_customers || 0);
+  const avgUnit    = customers > 0 ? Math.round(sales / customers) : 0;
+  const memberRate = customers > 0 ? Math.round(memberCust / customers * 100) : 0;
+
+  const storeCards = document.querySelectorAll('#tab-storec .card');
+  storeCards[0].innerHTML = `
+    <div class="card-title" style="margin-bottom:12px">🏪 直営店（スマレジ）</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">${customers}<span style="font-size:12px;color:var(--text3);font-weight:400">名</span></div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmtM(sales)}</div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客単価</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmt(avgUnit)}</div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">会員率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${memberRate}<span style="font-size:12px;font-weight:400">%</span></div></div>
+    </div>`;
+
+  // ---- KPIカード（EC）----
+  const orders    = Number(ek.orders || 0);
+  const ecSales   = Number(ek.sales  || 0);
+  const newOrders = Number(ek.new_orders || 0);
+  const ecUnit    = orders > 0 ? Math.round(ecSales / orders) : 0;
+  const newRate   = orders > 0 ? Math.round(newOrders / orders * 100) : 0;
+
+  storeCards[1].innerHTML = `
+    <div class="card-title" style="margin-bottom:12px">🛒 EC（FUTURESHOP）</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">受注数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">${orders}<span style="font-size:12px;color:var(--text3);font-weight:400">件</span></div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmtM(ecSales)}</div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客単価</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmt(ecUnit)}</div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">新規率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${newRate}<span style="font-size:12px;font-weight:400">%</span></div></div>
+    </div>`;
+
+  // ---- 直営店 日別売上・客数 ----
+  const sDaily = STOREC.storeDaily || [];
   rebuildChart('sc-store-daily', {
     type: 'bar',
     data: {
-      labels: SC_STORE.daily.map(d => d.d),
+      labels: sDaily.map(d => d.day),
       datasets: [
-        { label: '売上', data: SC_STORE.daily.map(d => d.s), backgroundColor: P.teal + '99', borderRadius: 3, yAxisID: 'y', order: 2 },
-        { label: '客数', data: SC_STORE.daily.map(d => d.c), type: 'line', borderColor: P.amber, backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y2', order: 1 }
+        { label: '売上', data: sDaily.map(d => Number(d.sales||0)), backgroundColor: P.teal + '99', borderRadius: 3, yAxisID: 'y', order: 2 },
+        { label: '客数', data: sDaily.map(d => Number(d.customers||0)), type: 'line', borderColor: P.amber, backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y2', order: 1 }
       ]
     },
     options: {
@@ -1996,14 +2027,16 @@ function renderStorecTab() {
       }
     }
   });
-  // EC 日別
+
+  // ---- EC 日別受注・売上 ----
+  const eDaily = STOREC.ecDaily || [];
   rebuildChart('sc-ec-daily', {
     type: 'bar',
     data: {
-      labels: SC_EC.daily.map(d => d.d),
+      labels: eDaily.map(d => d.day),
       datasets: [
-        { label: '売上', data: SC_EC.daily.map(d => d.s), backgroundColor: P.blue + '99', borderRadius: 3, yAxisID: 'y', order: 2 },
-        { label: '受注数', data: SC_EC.daily.map(d => d.c), type: 'line', borderColor: P.compare, backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y2', order: 1 }
+        { label: '売上', data: eDaily.map(d => Number(d.sales||0)), backgroundColor: P.blue + '99', borderRadius: 3, yAxisID: 'y', order: 2 },
+        { label: '受注数', data: eDaily.map(d => Number(d.orders||0)), type: 'line', borderColor: P.compare, backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y2', order: 1 }
       ]
     },
     options: {
@@ -2016,55 +2049,83 @@ function renderStorecTab() {
       }
     }
   });
-  // 時間帯
+
+  // ---- 時間帯別来客（直営店）----
+  const hourly = STOREC.storeHourly || [];
   rebuildChart('sc-hourly', {
     type: 'bar',
-    data: { labels: SC_STORE.hourly.map(h => h.h + '時'), datasets: [{ data: SC_STORE.hourly.map(h => h.c), backgroundColor: P.teal + 'BB', borderRadius: 4, borderSkipped: false }] },
+    data: { labels: hourly.map(h => Number(h.hour) + '時'), datasets: [{ data: hourly.map(h => Number(h.customers||0)), backgroundColor: P.teal + 'BB', borderRadius: 4, borderSkipped: false }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#F0F4F8' } } } }
   });
-  // 決済
-  const payKeys = Object.keys(SC_EC.payment);
-  const payVals = payKeys.map(k => SC_EC.payment[k]);
-  const payColors = [P.teal, P.blue, P.amber, P.green, P.gray];
+
+  // ---- 決済方法構成（EC）----
+  const payment  = STOREC.ecPayment || [];
+  const payKeys  = payment.map(p => p.payment_method);
+  const payVals  = payment.map(p => Number(p.cnt||0));
+  const payColors = [P.teal, P.blue, P.amber, P.green, P.gray, P.compare, P.navy2];
   rebuildChart('sc-payment', {
     type: 'doughnut',
-    data: { labels: payKeys, datasets: [{ data: payVals, backgroundColor: payColors, borderWidth: 3, borderColor: '#fff' }] },
+    data: { labels: payKeys, datasets: [{ data: payVals, backgroundColor: payKeys.map((_,i)=>payColors[i%payColors.length]), borderWidth: 3, borderColor: '#fff' }] },
     options: { responsive: false, cutout: '68%', plugins: { legend: { display: false } } }
   });
-  const totPay = payVals.reduce((a, b) => a + b, 0);
-  const leg = document.getElementById('sc-payment-legend');
-  if (leg) leg.innerHTML = payKeys.map((k, i) =>
-    `<div class="legend-item"><div class="legend-dot" style="background:${payColors[i]}"></div><div class="legend-lbl" style="font-size:10px">${k}</div><div class="legend-val" style="font-size:11px">${payVals[i]}</div><div class="legend-pct">${Math.round(payVals[i] / totPay * 100)}%</div></div>`
+  const totPay = payVals.reduce((a,b) => a+b, 0) || 1;
+  const legEl = document.getElementById('sc-payment-legend');
+  if (legEl) legEl.innerHTML = payKeys.map((k,i) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${payColors[i%payColors.length]}"></div><div class="legend-lbl" style="font-size:10px">${k}</div><div class="legend-val" style="font-size:11px">${payVals[i]}</div><div class="legend-pct">${Math.round(payVals[i]/totPay*100)}%</div></div>`
   ).join('');
-  // 新規リピート
+
+  // ---- 新規/リピート（EC）----
+  const nr = STOREC.ecNewRepeat || [];
+  const newCnt    = Number((nr.find(r => r.kind === '新規')    || {}).cnt || 0);
+  const repeatCnt = Number((nr.find(r => r.kind === 'リピート') || {}).cnt || 0);
+  const nrTot = newCnt + repeatCnt || 1;
   rebuildChart('sc-newrepeat', {
     type: 'doughnut',
-    data: { labels: ['新規', 'リピート'], datasets: [{ data: [67, 35], backgroundColor: [P.teal, P.compare], borderWidth: 3, borderColor: '#fff' }] },
+    data: { labels: ['新規','リピート'], datasets: [{ data: [newCnt, repeatCnt], backgroundColor: [P.teal, P.compare], borderWidth: 3, borderColor: '#fff' }] },
     options: { responsive: false, cutout: '68%', plugins: { legend: { display: false } } }
   });
-  // 会員/非会員
+  const nrLegend = document.querySelector('#tab-storec .card:has(#sc-newrepeat) .legend');
+  if (nrLegend) nrLegend.innerHTML = `
+    <div class="legend-item"><div class="legend-dot" style="background:${P.teal}"></div><div class="legend-lbl">新規</div><div class="legend-val">${newCnt}</div><div class="legend-pct">${Math.round(newCnt/nrTot*100)}%</div></div>
+    <div class="legend-item"><div class="legend-dot" style="background:${P.compare}"></div><div class="legend-lbl">リピート</div><div class="legend-val">${repeatCnt}</div><div class="legend-pct">${Math.round(repeatCnt/nrTot*100)}%</div></div>`;
+
+  // ---- 会員/非会員 売上比較（直営店）----
+  const sm = STOREC.storeMember || {};
+  const memberSales    = Number(sm.member_sales || 0);
+  const nonmemberSales = Number(sm.nonmember_sales || 0);
+  const memberTx       = Number(sm.member_tx || 0);
+  const nonmemberTx    = Number(sm.nonmember_tx || 0);
+  const memTot = memberSales + nonmemberSales || 1;
   rebuildChart('sc-member', {
     type: 'doughnut',
-    data: { labels: ['会員', '非会員'], datasets: [{ data: [2023186, 894908], backgroundColor: [P.teal, P.gray], borderWidth: 3, borderColor: '#fff' }] },
+    data: { labels: ['会員','非会員'], datasets: [{ data: [memberSales, nonmemberSales], backgroundColor: [P.teal, P.gray], borderWidth: 3, borderColor: '#fff' }] },
     options: { responsive: false, cutout: '68%', plugins: { legend: { display: false } } }
   });
-  // 会員ステージ
-  const stages = Object.entries(SC_EC.member_stage);
-  const stageColors = ['#CD7F32', '#C0C0C0', '#FFD700', '#E5E4E2'];
+  const memLegend = document.querySelector('#tab-storec .card:has(#sc-member) .legend');
+  if (memLegend) memLegend.innerHTML = `
+    <div class="legend-item"><div class="legend-dot" style="background:${P.teal}"></div><div class="legend-lbl">会員</div><div class="legend-val">¥${fmtM(memberSales)}</div><div class="legend-pct">${Math.round(memberSales/memTot*100)}%</div></div>
+    <div class="legend-item"><div class="legend-dot" style="background:${P.gray}"></div><div class="legend-lbl">非会員</div><div class="legend-val">¥${fmtM(nonmemberSales)}</div><div class="legend-pct">${Math.round(nonmemberSales/memTot*100)}%</div></div>
+    <div style="margin-top:10px;font-size:10px;color:var(--text3)">会員数: ${memberTx}名 / 非会員: ${nonmemberTx}名</div>`;
+
+  // ---- 会員ステージ別 受注数（EC）----
+  const stage = STOREC.ecMemberStage || [];
+  const stageColors = ['#CD7F32', '#C0C0C0', '#FFD700', '#E5E4E2', P.gray];
   rebuildChart('sc-member-stage', {
     type: 'bar',
-    data: { labels: stages.map(s => s[0]), datasets: [{ data: stages.map(s => s[1]), backgroundColor: stageColors, borderRadius: 4, borderSkipped: false }] },
+    data: { labels: stage.map(s => s.member_rank), datasets: [{ data: stage.map(s => Number(s.cnt||0)), backgroundColor: stage.map((_,i)=>stageColors[i%stageColors.length]), borderRadius: 4, borderSkipped: false }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#F0F4F8' } } } }
   });
-  // 商品テーブル（直営）
-  const sp = document.getElementById('sc-store-prod');
-  if (sp) sp.innerHTML = SC_STORE.products.map((p, i) =>
-    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.n}</td><td class="num">¥${fmt(p.s)}</td><td class="num">${p.q}</td></tr>`
+
+  // ---- 商品別売上TOP10（直営店）----
+  const sProd = document.getElementById('sc-store-prod');
+  if (sProd) sProd.innerHTML = (STOREC.storeProd||[]).map((p,i) =>
+    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.product_name||''}</td><td class="num">¥${fmt(p.sales)}</td><td class="num">${p.qty}</td></tr>`
   ).join('');
-  // 商品テーブル（EC）
-  const ep = document.getElementById('sc-ec-prod');
-  if (ep) ep.innerHTML = SC_EC.products.map((p, i) =>
-    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.n}</td><td class="num">¥${fmt(p.s)}</td></tr>`
+
+  // ---- 商品別売上TOP10（EC）----
+  const eProd = document.getElementById('sc-ec-prod');
+  if (eProd) eProd.innerHTML = (STOREC.ecProd||[]).map((p,i) =>
+    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.product_name||''}</td><td class="num">¥${fmt(p.sales)}</td></tr>`
   ).join('');
 }
 
@@ -2077,7 +2138,7 @@ function showTab(id,el){
   document.getElementById('tab-'+id).classList.add('active');
   el.classList.add('active');
   // 直営×ECタブ
-  if (id === 'storec') renderStorecTab();
+  if (id === 'storec') loadStorecData();
   // 補充検討タブは初回表示時にデータ取得
   if (id === 'replenishment' && !replLoaded && SESSION_TOKEN) {
     loadReplenishmentData();
@@ -2654,6 +2715,10 @@ applyDatePicker = function() {
   if (isLiveMode && SESSION_TOKEN) {
     document.getElementById('db-badge').textContent = '⟳ データ更新中...';
     loadBigQueryData();
+  }
+  const activeTabId = document.querySelector('.tab-content.active').id;
+  if (activeTabId === 'tab-storec' && SESSION_TOKEN) {
+    loadStorecData();
   }
 };
 
