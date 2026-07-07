@@ -1949,7 +1949,7 @@ function computeStorecAggregates(storeRows, ecRows) {
   const txMap = {};
   storeRows.forEach(r => {
     const tx = r.transaction_id;
-    if (!txMap[tx]) txMap[tx] = { day: r.day, hour: Number(r.hour), date_key: r.date_key, member_code: r.member_code, total: 0 };
+    if (!txMap[tx]) txMap[tx] = { day: r.day, hour: Number(r.hour), date_key: r.date_key, member_code: r.member_code, store_name: r.store_name || '不明', total: 0 };
     txMap[tx].total += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
   });
   const txList = Object.values(txMap);
@@ -1961,6 +1961,15 @@ function computeStorecAggregates(storeRows, ecRows) {
   const nonmemberSales  = sales - memberSales;
   const nonmemberTx     = customers - memberCustomers;
 
+  // 店舗別内訳（昨日追加した store_code/store_name 対応をこのタブにも反映）
+  const storeBreakdownMap = {};
+  txList.forEach(t => {
+    if (!storeBreakdownMap[t.store_name]) storeBreakdownMap[t.store_name] = { store_name: t.store_name, customers: 0, sales: 0 };
+    storeBreakdownMap[t.store_name].customers++;
+    storeBreakdownMap[t.store_name].sales += t.total;
+  });
+  const storeBreakdown = Object.values(storeBreakdownMap).sort((a,b) => b.sales - a.sales);
+
   const storeDailyMap = {};
   txList.forEach(t => {
     if (!storeDailyMap[t.date_key]) storeDailyMap[t.date_key] = { day: t.day, date_key: t.date_key, customers: 0, sales: 0 };
@@ -1968,6 +1977,16 @@ function computeStorecAggregates(storeRows, ecRows) {
     storeDailyMap[t.date_key].sales += t.total;
   });
   const storeDaily = Object.values(storeDailyMap).sort((a,b) => a.date_key < b.date_key ? -1 : 1);
+
+  // 店舗別 × 日別（積み上げグラフ用）
+  const storeDailyByStoreMap = {};
+  txList.forEach(t => {
+    const key = t.date_key + '|' + t.store_name;
+    if (!storeDailyByStoreMap[key]) storeDailyByStoreMap[key] = { day: t.day, date_key: t.date_key, store_name: t.store_name, customers: 0, sales: 0 };
+    storeDailyByStoreMap[key].customers++;
+    storeDailyByStoreMap[key].sales += t.total;
+  });
+  const storeDailyByStore = Object.values(storeDailyByStoreMap).sort((a,b) => a.date_key < b.date_key ? -1 : 1);
 
   const storeHourlyMap = {};
   txList.forEach(t => {
@@ -2032,7 +2051,7 @@ function computeStorecAggregates(storeRows, ecRows) {
 
   return {
     storeKpi:      { customers, sales, member_customers: memberCustomers },
-    storeDaily, storeHourly, storeProd,
+    storeDaily, storeDailyByStore, storeBreakdown, storeHourly, storeProd,
     storeMember:   { member_tx: memberCustomers, member_sales: memberSales, nonmember_tx: nonmemberTx, nonmember_sales: nonmemberSales },
     ecKpi:         { orders, sales: ecSales, new_orders: newOrders },
     ecDaily, ecPayment, ecNewRepeat, ecMemberStage, ecProd,
@@ -2082,6 +2101,13 @@ function renderStorecTab() {
   const memberRate = customers > 0 ? Math.round(memberCust / customers * 100) : 0;
 
   const storeCards = document.querySelectorAll('#tab-storec .card');
+  const storeBreakdown = STOREC.storeBreakdown || [];
+  const storeColors = { 'FLAGSHIP SHOP': P.teal, 'TRION日本橋店': P.blue, '不明': P.gray };
+  const breakdownHtml = storeBreakdown.length > 1 ? `
+    <div style="display:flex;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(15,35,64,.06);flex-wrap:wrap">
+      ${storeBreakdown.map(s => `<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text2)"><div style="width:8px;height:8px;border-radius:50%;background:${storeColors[s.store_name]||P.navy2}"></div>${s.store_name}: ¥${fmtM(s.sales)}（${s.customers}名）</div>`).join('')}
+    </div>` : '';
+
   storeCards[0].innerHTML = `
     <div class="card-title" style="margin-bottom:12px">🏪 直営店（スマレジ）</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
@@ -2089,7 +2115,7 @@ function renderStorecTab() {
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmtM(sales)}</div></div>
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客単価</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmt(avgUnit)}</div></div>
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">会員率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${memberRate}<span style="font-size:12px;font-weight:400">%</span></div></div>
-    </div>`;
+    </div>${breakdownHtml}`;
 
   // ---- KPIカード（EC）----
   const orders    = Number(ek.orders || 0);
@@ -2107,23 +2133,50 @@ function renderStorecTab() {
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">新規率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${newRate}<span style="font-size:12px;font-weight:400">%</span></div></div>
     </div>`;
 
-  // ---- 直営店 日別売上・客数 ----
-  const sDaily = STOREC.storeDaily || [];
+  // ---- 直営店 日別売上・客数（店舗別 積み上げ）----
+  const sDailyByStore = STOREC.storeDailyByStore || [];
+  const sDaily        = STOREC.storeDaily || [];
+  const scStores = [...new Set(sDailyByStore.map(d => d.store_name))].sort();
+  const scDays   = [...new Set(sDailyByStore.map(d => d.day))];
+  // dailyの並び順(date_key昇順)に合わせて日付ラベルを揃える
+  const scDayOrder = sDaily.map(d => d.day);
+  const scDaysSorted = scDayOrder.length ? scDayOrder : scDays;
+
+  const scStoreDatasets = scStores.map(store => ({
+    label: store,
+    data: scDaysSorted.map(day => {
+      const row = sDailyByStore.find(d => d.day === day && d.store_name === store);
+      return row ? row.sales : 0;
+    }),
+    backgroundColor: (storeColors[store] || P.navy2) + 'BB',
+    borderRadius: 3, borderSkipped: false,
+    stack: 'store', yAxisID: 'y', order: 2,
+  }));
+  const scCustomerLine = {
+    label: '客数',
+    type: 'line',
+    data: scDaysSorted.map(day => {
+      const row = sDaily.find(d => d.day === day);
+      return row ? Number(row.customers||0) : 0;
+    }),
+    borderColor: P.amber, backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y2', order: 1,
+  };
+
   rebuildChart('sc-store-daily', {
     type: 'bar',
     data: {
-      labels: sDaily.map(d => d.day),
-      datasets: [
+      labels: scDaysSorted,
+      datasets: scStores.length > 1 ? [...scStoreDatasets, scCustomerLine] : [
         { label: '売上', data: sDaily.map(d => Number(d.sales||0)), backgroundColor: P.teal + '99', borderRadius: 3, yAxisID: 'y', order: 2 },
-        { label: '客数', data: sDaily.map(d => Number(d.customers||0)), type: 'line', borderColor: P.amber, backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y2', order: 1 }
+        scCustomerLine,
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'top', labels: { boxWidth: 8 } } },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
-        y: { ticks: { callback: v => '¥' + Math.round(v / 1e4) + '万' }, grid: { color: '#F0F4F8' } },
+        x: { grid: { display: false }, ticks: { font: { size: 9 } }, stacked: true },
+        y: { ticks: { callback: v => '¥' + Math.round(v / 1e4) + '万' }, grid: { color: '#F0F4F8' }, stacked: true },
         y2: { position: 'right', ticks: { callback: v => v + '名' }, grid: { drawOnChartArea: false } }
       }
     }
