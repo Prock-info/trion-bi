@@ -942,6 +942,7 @@ canvas { display:block; }
     <div class="card"><div class="card-title">直営店 日別売上・客数</div><div style="height:220px"><canvas id="sc-store-daily"></canvas></div></div>
     <div class="card"><div class="card-title">EC 日別受注・売上</div><div style="height:220px"><canvas id="sc-ec-daily"></canvas></div></div>
   </div>
+  <div class="card mb"><div class="card-title">客単価 日別推移（直営店 × EC）</div><div style="height:200px"><canvas id="sc-unit-price"></canvas></div></div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
     <div class="card"><div class="card-title">時間帯別 来客（直営店）</div><div style="height:180px"><canvas id="sc-hourly"></canvas></div></div>
     <div class="card"><div class="card-title">決済方法構成（EC）</div>
@@ -2252,6 +2253,41 @@ function renderStorecTab() {
         x: { grid: { display: false } },
         y: { ticks: { callback: v => '¥' + Math.round(v / 1e4) + '万' }, grid: { color: '#F0F4F8' } },
         y2: { position: 'right', ticks: { callback: v => v + '件' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+
+  // ---- 客単価 日別推移（直営店 × EC）----
+  // 日付(date_key)をキーに両者を突き合わせ、共通の日付軸で並べる
+  const dateKeyToDay = {};
+  sDaily.forEach(d => { dateKeyToDay[d.date_key] = d.day; });
+  eDaily.forEach(d => { dateKeyToDay[d.date_key] = d.day; });
+  const upDateKeys = Object.keys(dateKeyToDay).sort();
+  const upDays = upDateKeys.map(k => dateKeyToDay[k]);
+
+  const storeUnitByKey = {};
+  sDaily.forEach(d => { storeUnitByKey[d.date_key] = Number(d.customers||0) > 0 ? d.sales / d.customers : null; });
+  const ecUnitByKey = {};
+  eDaily.forEach(d => { ecUnitByKey[d.date_key] = Number(d.orders||0) > 0 ? d.sales / d.orders : null; });
+
+  rebuildChart('sc-unit-price', {
+    type: 'line',
+    data: {
+      labels: upDays,
+      datasets: [
+        { label: '客単価（直営店）', data: upDateKeys.map(k => storeUnitByKey[k] ?? null), borderColor: P.teal, backgroundColor: 'transparent', tension: 0.3, spanGaps: true, pointRadius: 3 },
+        { label: '客単価（EC）', data: upDateKeys.map(k => ecUnitByKey[k] ?? null), borderColor: P.compare, backgroundColor: 'transparent', tension: 0.3, spanGaps: true, pointRadius: 3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 8 } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ¥' + fmt(ctx.raw || 0) } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+        y: { ticks: { callback: v => '¥' + fmt(v) }, grid: { color: '#F0F4F8' } }
       }
     }
   });
