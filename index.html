@@ -640,7 +640,7 @@ canvas { display:block; }
   <div class="row2">
     <div class="card"><div class="card-title">カテゴリ別 売上 <span class="card-sub">TOP8</span></div><div style="height:220px"><canvas id="cat-bar"></canvas></div></div>
     <div class="card"><div class="card-title">チャネル × 粗利率</div>
-      <table class="tbl"><thead><tr><th>チャネル</th><th class="num">売上</th><th class="num" id="cmp-col-head" style="display:none">比較売上</th><th class="num">粗利</th><th class="num">粗利率</th></tr></thead>
+      <table class="tbl"><thead><tr><th>チャネル</th><th class="num">売上</th><th class="num" id="cmp-col-head" style="display:none">比較売上</th><th class="num">粗利</th><th class="num">粗利率</th><th class="num">予算</th><th class="num">予算比</th><th class="num">予算差</th><th class="num">前年実績</th><th class="num">前年比</th><th class="num">前年差</th></tr></thead>
       <tbody id="ch-tbl"></tbody></table>
     </div>
   </div>
@@ -657,7 +657,7 @@ canvas { display:block; }
 <div id="tab-channel" class="tab-content page">
   <div class="row2">
     <div class="card"><div class="card-title">得意先別 売上</div>
-      <div class="tbl-scroll"><table class="tbl"><thead><tr><th></th><th>得意先</th><th>チャネル</th><th class="num">売上</th><th class="num">粗利</th><th class="num">粗利率</th></tr></thead><tbody id="client-tbl"></tbody></table></div>
+      <div class="tbl-scroll"><table class="tbl"><thead><tr><th></th><th>得意先</th><th>チャネル</th><th class="num">売上</th><th class="num">粗利</th><th class="num">粗利率</th><th class="num">予算</th><th class="num">予算比</th><th class="num">予算差</th><th class="num">前年実績</th><th class="num">前年比</th><th class="num">前年差</th></tr></thead><tbody id="client-tbl"></tbody></table></div>
     </div>
     <div class="card"><div class="card-title">チャネル別 粗利率</div><div style="height:260px"><canvas id="ch-gross-bar"></canvas></div></div>
   </div>
@@ -1283,6 +1283,7 @@ function applyDatePicker(){
 // FILTER STATE
 // =====================================================================
 let filteredRows=RAW.rows.slice();
+let filteredPrevRows=[];
 let filteredSkus=RAW.skus.slice();
 let productPage_=0;
 const PAGE_SIZE=30;
@@ -1299,13 +1300,15 @@ function applyFilters(){
   const cat=document.getElementById('f-category').value;
   const ser=document.getElementById('f-series').value;
   const sea=document.getElementById('f-season').value;
-  filteredRows=RAW.rows.filter(r=>{
+  const predicate = r=>{
     if(brand&&r[7]!==brand) return false;
     if(ch&&r[RCH]!==ch) return false;
     if(cat&&r[RCAT]!==cat) return false;
     if(ser&&r[RSER]!==ser) return false;
     return true;
-  });
+  };
+  filteredRows=RAW.rows.filter(predicate);
+  filteredPrevRows=(RAW.prevRows||[]).filter(predicate);
   filteredSkus=RAW.skus.filter(r=>{
     if(cat&&r[SCAT]!==cat) return false;
     if(ser&&r[SSER]!==ser) return false;
@@ -1320,6 +1323,7 @@ function applyFilters(){
 function resetFilters(){
   ['f-brand','f-channel','f-category','f-series','f-season'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   filteredRows=RAW.rows.slice();
+  filteredPrevRows=(RAW.prevRows||[]).slice();
   filteredSkus=RAW.skus.slice();
   document.getElementById('filter-count').textContent='全601件';
   productPage_=0;
@@ -1357,6 +1361,11 @@ function rebuildChart(id,cfg){
   charts[id]=new Chart(el,cfg);
 }
 function diffHtml(a,b){if(!b) return '';const d=((a-b)/Math.abs(b)*100);if(Math.abs(d)<0.1) return `<span style="font-size:10px;color:var(--text3)">±0%</span>`;return d>0?`<span style="font-size:10px;color:#16A34A">▲${d.toFixed(1)}%</span>`:`<span style="font-size:10px;color:var(--red)">▼${Math.abs(d).toFixed(1)}%</span>`}
+// 金額の差分（実績-予算 / 実績-前年）を色付き矢印付きで表示
+function diffAmountHtml(amount){
+  if(Math.abs(amount)<1) return `<span style="color:var(--text3)">±0</span>`;
+  return amount>0?`<span style="color:#16A34A">▲¥${fmtM(amount)}</span>`:`<span style="color:var(--red)">▼¥${fmtM(Math.abs(amount))}</span>`;
+}
 
 function aggRows(rows){
   const cm={};
@@ -1395,10 +1404,16 @@ function renderSummary(){
   const cm=aggRows(rows);
   const cl=Object.entries(cm).sort((a,b)=>b[1].s-a[1].s);
 
-  // Bar chart — with compare overlay
+  // 予算・前年実績（チャネル別）
+  const brandFilter=document.getElementById('f-brand')?document.getElementById('f-brand').value:'';
+  const {py,bg}=aggChannelExtra(filteredPrevRows,brandFilter);
+
+  // Bar chart — with compare overlay + 予算 + 前年実績
   const datasets=[
     {label:'売上',data:cl.map(c=>c[1].s),backgroundColor:cl.map(c=>chColor(c[0])+'CC'),borderRadius:5,borderSkipped:false},
     {label:'粗利',data:cl.map(c=>c[1].g),backgroundColor:cl.map(c=>chColor(c[0])+'44'),borderRadius:5,borderSkipped:false},
+    {label:'予算',data:cl.map(c=>bg[c[0]]||0),backgroundColor:'rgba(15,35,64,.15)',borderRadius:5,borderSkipped:false,borderColor:'rgba(15,35,64,.4)',borderWidth:1},
+    {label:'前年実績',data:cl.map(c=>py[c[0]]||0),backgroundColor:'rgba(148,163,184,.35)',borderRadius:5,borderSkipped:false},
   ];
   if(cmpOn){
     datasets.push({label:'比較期間売上',data:cl.map(c=>c[1].s*0.92),backgroundColor:'rgba(124,58,237,.2)',borderRadius:5,borderSkipped:false,borderColor:'rgba(124,58,237,.5)',borderWidth:1});
@@ -1420,12 +1435,18 @@ function renderSummary(){
   // Monthly chart
   renderMonthlySales();
 
-  // Ch table
+  // Ch table（+ 予算・予算比・予算差・前年実績・前年比・前年差）
   const cmpColVisible=cmpOn;
   document.getElementById('ch-tbl').innerHTML=cl.map(c=>{
     const gr2=c[1].s>0?(c[1].g/c[1].s*100).toFixed(1):'0.0';
     const cmpSalesTd=cmpColVisible?`<td class="num cmp-val">¥${fmtM(c[1].s*0.92)}</td>`:'';
-    return`<tr><td><span class="pill ${pill(c[0])}">${c[0]}</span></td><td class="num">¥${fmtM(c[1].s)}</td>${cmpSalesTd}<td class="num">¥${fmtM(c[1].g)}</td><td class="num ${grClass(gr2)}">${gr2}%</td></tr>`;
+    const budget=bg[c[0]]||0;
+    const budgetRate=budget>0?(c[1].s/budget*100).toFixed(1)+'%':'—';
+    const budgetDiff=budget>0?diffAmountHtml(c[1].s-budget):'—';
+    const prevActual=py[c[0]]||0;
+    const yoyRate=prevActual>0?(c[1].s/prevActual*100).toFixed(1)+'%':'—';
+    const yoyDiff=prevActual>0?diffAmountHtml(c[1].s-prevActual):'—';
+    return`<tr><td><span class="pill ${pill(c[0])}">${c[0]}</span></td><td class="num">¥${fmtM(c[1].s)}</td>${cmpSalesTd}<td class="num">¥${fmtM(c[1].g)}</td><td class="num ${grClass(gr2)}">${gr2}%</td><td class="num muted">${budget>0?'¥'+fmtM(budget):'—'}</td><td class="num">${budgetRate}</td><td class="num">${budgetDiff}</td><td class="num muted">${prevActual>0?'¥'+fmtM(prevActual):'—'}</td><td class="num">${yoyRate}</td><td class="num">${yoyDiff}</td></tr>`;
   }).join('');
 }
 
@@ -1437,7 +1458,17 @@ function renderChannel(){
   const cm=aggRows(rows);
   const cl=Object.entries(cm).sort((a,b)=>b[1].s-a[1].s);
   rebuildChart('ch-gross-bar',{type:'bar',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>+(c[1].g/c[1].s*100).toFixed(1)),backgroundColor:cl.map(c=>chColor(c[0])),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:20,max:80,ticks:{callback:v=>v+'%'},grid:{color:'#F0F4F8'}},x:{grid:{display:false}}}}});
-  document.getElementById('client-tbl').innerHTML=cl.map((c,i)=>`<tr><td class=\"rank ${i<3?'top3':''}\">${ i+1}</td><td style=\"font-size:11px\">${c[0]}</td><td><span class=\"pill ${pill(c[0])}\">${c[0]}</span></td><td class=\"num\">¥${fmtM(c[1].s)}</td><td class=\"num\">¥${fmtM(c[1].g)}</td><td class=\"num ${grClass(c[1].g/c[1].s*100)}\">${(c[1].g/c[1].s*100).toFixed(1)}%</td></tr>`).join('');
+  const brandFilter=document.getElementById('f-brand')?document.getElementById('f-brand').value:'';
+  const {py,bg}=aggChannelExtra(filteredPrevRows,brandFilter);
+  document.getElementById('client-tbl').innerHTML=cl.map((c,i)=>{
+    const budget=bg[c[0]]||0;
+    const budgetRate=budget>0?(c[1].s/budget*100).toFixed(1)+'%':'—';
+    const budgetDiff=budget>0?diffAmountHtml(c[1].s-budget):'—';
+    const prevActual=py[c[0]]||0;
+    const yoyRate=prevActual>0?(c[1].s/prevActual*100).toFixed(1)+'%':'—';
+    const yoyDiff=prevActual>0?diffAmountHtml(c[1].s-prevActual):'—';
+    return `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${c[0]}</td><td><span class="pill ${pill(c[0])}">${c[0]}</span></td><td class="num">¥${fmtM(c[1].s)}</td><td class="num">¥${fmtM(c[1].g)}</td><td class="num ${grClass(c[1].g/c[1].s*100)}">${(c[1].g/c[1].s*100).toFixed(1)}%</td><td class="num muted">${budget>0?'¥'+fmtM(budget):'—'}</td><td class="num">${budgetRate}</td><td class="num">${budgetDiff}</td><td class="num muted">${prevActual>0?'¥'+fmtM(prevActual):'—'}</td><td class="num">${yoyRate}</td><td class="num">${yoyDiff}</td></tr>`;
+  }).join('');
   const days=RAW.daily;
   // スマレジ店舗別日別グラフ
   const smaData = RAW.smaDaily || [];
@@ -2808,6 +2839,18 @@ async function loadBigQueryData() {
       r.category1_name ?? 'TRION',  // index 7: brand (from v_sales_unified)
     ]);
 
+    // 前年同期間データ（前年比較用。以前は取得のみで未使用だった）
+    RAW.prevRows = (data.prevRows || []).map(r => [
+      r.product_code   ?? '',
+      r.channel        ?? '',
+      r.category_name  ?? '',
+      r.series_name    ?? '',
+      Number(r.net_sales    ?? 0),
+      Number(r.gross_profit ?? 0),
+      Number(r.qty_sold     ?? 0),
+      r.category1_name ?? 'TRION',
+    ]);
+
     // 月別売上データ更新
     if (data.monthly && data.monthly.length > 0) {
       RAW.monthly = data.monthly.map(r => ({
@@ -2878,6 +2921,7 @@ async function loadBigQueryData() {
 
     applyFilters();
     _origRenderAll(); // ログイン後の初回描画
+    loadBudgetData();  // 予算データも取得（描画をブロックしないよう非同期のまま）
 
   } catch(e) {
     console.error('GAS proxy error:', e);
@@ -2888,6 +2932,49 @@ async function loadBigQueryData() {
   }
 }
 
+// ========== 予算データ取得（budget_plan）==========
+let budgetLoaded = false;
+async function loadBudgetData() {
+  if (!SESSION_TOKEN) return;
+  const fmtD = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const start = fmtD(dpState.applied.start);
+  const end   = fmtD(dpState.applied.end);
+  try {
+    const url  = `${GAS_URL}?action=budget&token=${encodeURIComponent(SESSION_TOKEN)}&start=${start}&end=${end}`;
+    const data = await jsonp(url);
+    if (!data.ok) throw new Error(data.error);
+    // budget_plan.channel_name は既にダッシュボードの channel（channel2_name）と同じ表記
+    RAW.budget = (data.rows || []).map(r => ({
+      channel_code: r.channel_code ?? '',
+      channel_name: r.channel_name ?? '',
+      brand:        r.brand ?? '',
+      month:        r.month ?? '',
+      sales_budget: Number(r.sales_budget ?? 0),
+    }));
+    budgetLoaded = true;
+    renderAll();
+  } catch(e) {
+    console.error('予算データ取得エラー:', e);
+  }
+}
+
+// チャネル別の予算・前年実績を集計するヘルパー
+// brand: 現在選択中のブランドフィルタ値（''なら全ブランド合算）
+function aggChannelExtra(prevRows, brand) {
+  const py = {};
+  (prevRows || []).forEach(r => {
+    if (!py[r[RCH]]) py[r[RCH]] = 0;
+    py[r[RCH]] += r[RS];
+  });
+  const bg = {};
+  (RAW.budget || []).forEach(b => {
+    if (brand && b.brand !== brand) return;
+    if (!bg[b.channel_name]) bg[b.channel_name] = 0;
+    bg[b.channel_name] += b.sales_budget;
+  });
+  return { py, bg };
+}
+
 // 日付ピッカー「適用」時にも再取得
 const _origApplyDatePicker = applyDatePicker;
 applyDatePicker = function() {
@@ -2895,6 +2982,7 @@ applyDatePicker = function() {
   if (isLiveMode && SESSION_TOKEN) {
     document.getElementById('db-badge').textContent = '⟳ データ更新中...';
     loadBigQueryData();
+    loadBudgetData();
   }
   const activeTabId = document.querySelector('.tab-content.active').id;
   if (activeTabId === 'tab-storec' && SESSION_TOKEN) {
