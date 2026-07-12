@@ -1010,8 +1010,22 @@ const P={
   navy:'#0F2340',navy2:'#1a3459',
   amber:'#F59E0B',red:'#F05C5C',compare:'#7C3AED',
   gray:'#CBD5E1',gray2:'#94A3B8',
-  ch:{'EC':'#3DD6C8','直営店':'#5BE8A0','卸/BtoB':'#7DEBFF','POPUP/百貨店':'#A8F7E3','Amazon':'#F59E0B'}
+  ch:{
+    'ONLINE STORE':'#3DD6C8', 'EC':'#3DD6C8',
+    '卸':'#7DEBFF', '卸/BtoB':'#7DEBFF',
+    'コレド日本橋':'#5BE8A0', 'FLAGSHIP SHOP':'#92F1F6', '直営店':'#5BE8A0',
+    'POPUP':'#F59E0B', 'POPUP/百貨店':'#F59E0B',
+    'Amazon':'#C2FFDF',
+  }
 };
+// チャネル配色：未登録のチャネル名が来ても黒にならないようフォールバックさせる
+const CH_FALLBACK_COLORS=['#3DD6C8','#7DEBFF','#5BE8A0','#92F1F6','#F59E0B','#C2FFDF','#A8F7E3','#7C3AED'];
+function chColor(name){
+  if(P.ch[name]) return P.ch[name];
+  // 未知のチャネル名は名前のハッシュから一定の色を割り当てる（再読み込みでも同じ色になる）
+  let h=0; for(let i=0;i<String(name).length;i++) h=(h*31+String(name).charCodeAt(i))>>>0;
+  return CH_FALLBACK_COLORS[h%CH_FALLBACK_COLORS.length];
+}
 
 Chart.defaults.color='#8FA3BC';
 Chart.defaults.borderColor='#E2E8F0';
@@ -1324,7 +1338,13 @@ function fmtM(n){
 }
 function grClass(v){return v>=65?'gr-h':v>=55?'gr-m':'gr-l'}
 function dCol(v){return v>=80?'#16A34A':v>=40?P.amber:P.red}
-function pill(ch){const m={'EC':'pill-ec','直営店':'pill-store','卸/BtoB':'pill-btob','POPUP/百貨店':'pill-popup','Amazon':'pill-amz'};return m[ch]||''}
+function pill(ch){const m={
+  'ONLINE STORE':'pill-ec', 'EC':'pill-ec',
+  'コレド日本橋':'pill-store', 'FLAGSHIP SHOP':'pill-store', '直営店':'pill-store',
+  '卸':'pill-btob', '卸/BtoB':'pill-btob',
+  'POPUP':'pill-popup', 'POPUP/百貨店':'pill-popup',
+  'Amazon':'pill-amz',
+};return m[ch]||'pill-btob'}
 function rebuildChart(id,cfg){
   const el=document.getElementById(id);if(!el)return;
   if(charts[id])charts[id].destroy();
@@ -1377,8 +1397,8 @@ function renderSummary(){
 
   // Bar chart — with compare overlay
   const datasets=[
-    {label:'売上',data:cl.map(c=>c[1].s),backgroundColor:cl.map(c=>P.ch[c[0]]+'CC'),borderRadius:5,borderSkipped:false},
-    {label:'粗利',data:cl.map(c=>c[1].g),backgroundColor:cl.map(c=>P.ch[c[0]]+'44'),borderRadius:5,borderSkipped:false},
+    {label:'売上',data:cl.map(c=>c[1].s),backgroundColor:cl.map(c=>chColor(c[0])+'CC'),borderRadius:5,borderSkipped:false},
+    {label:'粗利',data:cl.map(c=>c[1].g),backgroundColor:cl.map(c=>chColor(c[0])+'44'),borderRadius:5,borderSkipped:false},
   ];
   if(cmpOn){
     datasets.push({label:'比較期間売上',data:cl.map(c=>c[1].s*0.92),backgroundColor:'rgba(124,58,237,.2)',borderRadius:5,borderSkipped:false,borderColor:'rgba(124,58,237,.5)',borderWidth:1});
@@ -1387,8 +1407,8 @@ function renderSummary(){
 
   // Donut
   const totS=cl.reduce((s,c)=>s+c[1].s,0);
-  rebuildChart('ch-donut',{type:'doughnut',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>c[1].s),backgroundColor:cl.map(c=>P.ch[c[0]]),borderWidth:3,borderColor:'#fff'}]},options:{responsive:false,maintainAspectRatio:true,aspectRatio:1,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.label+': ¥'+fmt(ctx.raw)}}}}});
-  document.getElementById('ch-legend').innerHTML=cl.map(c=>`<div class="legend-item"><div class="legend-dot" style="background:${P.ch[c[0]]}"></div><div class="legend-lbl">${c[0]}</div><div class="legend-val">¥${fmtM(c[1].s)}</div><div class="legend-pct">${(c[1].s/totS*100).toFixed(0)}%</div></div>`).join('');
+  rebuildChart('ch-donut',{type:'doughnut',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>c[1].s),backgroundColor:cl.map(c=>chColor(c[0])),borderWidth:3,borderColor:'#fff'}]},options:{responsive:false,maintainAspectRatio:true,aspectRatio:1,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.label+': ¥'+fmt(ctx.raw)}}}}});
+  document.getElementById('ch-legend').innerHTML=cl.map(c=>`<div class="legend-item"><div class="legend-dot" style="background:${chColor(c[0])}"></div><div class="legend-lbl">${c[0]}</div><div class="legend-val">¥${fmtM(c[1].s)}</div><div class="legend-pct">${(c[1].s/totS*100).toFixed(0)}%</div></div>`).join('');
 
   // Cat bar
   const catM={};rows.forEach(r=>{if(!catM[r[RCAT]])catM[r[RCAT]]=0;catM[r[RCAT]]+=r[RS]});
@@ -1416,7 +1436,7 @@ function renderChannel(){
   const rows=filteredRows;
   const cm=aggRows(rows);
   const cl=Object.entries(cm).sort((a,b)=>b[1].s-a[1].s);
-  rebuildChart('ch-gross-bar',{type:'bar',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>+(c[1].g/c[1].s*100).toFixed(1)),backgroundColor:cl.map(c=>P.ch[c[0]]),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:20,max:80,ticks:{callback:v=>v+'%'},grid:{color:'#F0F4F8'}},x:{grid:{display:false}}}}});
+  rebuildChart('ch-gross-bar',{type:'bar',data:{labels:cl.map(c=>c[0]),datasets:[{data:cl.map(c=>+(c[1].g/c[1].s*100).toFixed(1)),backgroundColor:cl.map(c=>chColor(c[0])),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:20,max:80,ticks:{callback:v=>v+'%'},grid:{color:'#F0F4F8'}},x:{grid:{display:false}}}}});
   document.getElementById('client-tbl').innerHTML=cl.map((c,i)=>`<tr><td class=\"rank ${i<3?'top3':''}\">${ i+1}</td><td style=\"font-size:11px\">${c[0]}</td><td><span class=\"pill ${pill(c[0])}\">${c[0]}</span></td><td class=\"num\">¥${fmtM(c[1].s)}</td><td class=\"num\">¥${fmtM(c[1].g)}</td><td class=\"num ${grClass(c[1].g/c[1].s*100)}\">${(c[1].g/c[1].s*100).toFixed(1)}%</td></tr>`).join('');
   const days=RAW.daily;
   // スマレジ店舗別日別グラフ
