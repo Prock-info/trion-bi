@@ -569,7 +569,7 @@ canvas { display:block; }
   <span class="flabel">ブランド</span>
   <select id="f-brand" onchange="applyFilters()"><option value="">すべて</option><option>TRION</option><option>TOMOE</option></select>
   <span class="flabel">チャネル</span>
-  <select id="f-channel" onchange="applyFilters()"><option value="">すべて</option><option>EC</option><option>直営店</option><option>卸/BtoB</option><option>POPUP/百貨店</option></select>
+  <select id="f-channel" onchange="applyFilters()"><option value="">すべて</option></select>
   <span class="flabel">カテゴリ</span>
   <select id="f-category" onchange="applyFilters()"><option value="">すべて</option></select>
   <span class="flabel">シリーズ</span>
@@ -1277,6 +1277,7 @@ const charts={};
 RAW.filters.categories.forEach(c=>{document.getElementById('f-category').innerHTML+=`<option>${c}</option>`});
 RAW.filters.series.forEach(s=>{document.getElementById('f-series').innerHTML+=`<option>${s}</option>`});
 RAW.filters.seasons.forEach(s=>{document.getElementById('f-season').innerHTML+=`<option>${s}</option>`});
+RAW.filters.channels.forEach(c=>{document.getElementById('f-channel').innerHTML+=`<option>${c}</option>`});
 
 function applyFilters(){
   const brand=document.getElementById('f-brand')?document.getElementById('f-brand').value:'';
@@ -2832,15 +2833,20 @@ async function loadBigQueryData() {
     }
 
     // フィルタ選択肢を更新
+    const chs  = [...new Set(RAW.rows.map(r=>r[RC+1]).filter(Boolean))].sort();
     const cats = [...new Set(RAW.rows.map(r=>r[RC+2]).filter(Boolean))].sort();
     const sers = [...new Set(RAW.rows.map(r=>r[RC+3]).filter(Boolean))].sort();
+    RAW.filters.channels   = chs;
     RAW.filters.categories = cats;
     RAW.filters.series     = sers;
 
+    const chEl  = document.getElementById('f-channel');
     const catEl = document.getElementById('f-category');
     const serEl = document.getElementById('f-series');
+    chEl.innerHTML  = '<option value="">すべて</option>';
     catEl.innerHTML = '<option value="">すべて</option>';
     serEl.innerHTML = '<option value="">すべて</option>';
+    chs.forEach(c => chEl.innerHTML += `<option>${c}</option>`);
     cats.forEach(c => catEl.innerHTML += `<option>${c}</option>`);
     sers.forEach(s => serEl.innerHTML += `<option>${s}</option>`);
 
