@@ -935,7 +935,7 @@ canvas { display:block; }
     <div class="card"><div class="card-title">直営店 日別売上・客数</div><div style="height:220px"><canvas id="sc-store-daily"></canvas></div></div>
     <div class="card"><div class="card-title">EC 日別受注・売上</div><div style="height:220px"><canvas id="sc-ec-daily"></canvas></div></div>
   </div>
-  <div class="card mb"><div class="card-title">客単価 日別推移（直営店 × EC）</div><div style="height:200px"><canvas id="sc-unit-price"></canvas></div></div>
+  <div class="card mb"><div class="card-title">客単価 週次推移（直営店 × EC）<span class="card-sub">選択期間中心 ± 前後を含め約20週</span></div><div style="height:200px"><canvas id="sc-unit-price"></canvas></div></div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
     <div class="card"><div class="card-title">時間帯別 来客（直営店）</div><div style="height:180px"><canvas id="sc-hourly"></canvas></div></div>
     <div class="card"><div class="card-title">決済方法構成（EC）</div>
@@ -1987,9 +1987,17 @@ let storecLoadedPeriod = null; // 期間が変わったか判定用
 // 明細行(storeRows/ecRows)からダッシュボード表示用の集計形に変換する。
 // BigQuery側のジョブ数を減らして表示を高速化するため、
 // 日別/時間帯別/決済方法別...の集計はここ(フロント側JS)で行う。
-function computeStorecAggregates(storeRows, ecRows) {
-  storeRows = storeRows || [];
-  ecRows    = ecRows    || [];
+function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowEnd) {
+  storeRowsWide = storeRowsWide || [];
+  ecRowsWide    = ecRowsWide    || [];
+
+  // 週次客単価は「広い範囲」全体を使う。それ以外のKPI/日別/時間帯別等は
+  // 従来通り「選択期間のみ」に絞り込んで集計する。
+  const weeklyUnitPrice = computeWeeklyUnitPrice(storeRowsWide, ecRowsWide, narrowStart);
+
+  const inNarrow = dk => (!narrowStart || dk >= narrowStart) && (!narrowEnd || dk <= narrowEnd);
+  const storeRows = narrowStart ? storeRowsWide.filter(r => inNarrow(r.date_key)) : storeRowsWide;
+  const ecRows    = narrowStart ? ecRowsWide.filter(r => inNarrow(r.date_key))    : ecRowsWide;
 
   // ---- 直営店：取引(transaction_id)単位に集約 ----
   const txMap = {};
@@ -2101,28 +2109,91 @@ function computeStorecAggregates(storeRows, ecRows) {
     storeMember:   { member_tx: memberCustomers, member_sales: memberSales, nonmember_tx: nonmemberTx, nonmember_sales: nonmemberSales },
     ecKpi:         { orders, sales: ecSales, new_orders: newOrders },
     ecDaily, ecPayment, ecNewRepeat, ecMemberStage, ecProd,
+    weeklyUnitPrice,
   };
+}
+
+// 客単価の週次推移を計算する（storeRows/ecRowsは選択期間より広い範囲のもの）。
+// narrowStart（選択期間の開始日, 'YYYY-MM-DD'）を基準に7日単位のバケットに区切るので、
+// 期間を変えても週の境界が選択開始日にきちんと揃う。
+function computeWeeklyUnitPrice(storeRowsWide, ecRowsWide, narrowStart) {
+  storeRowsWide = storeRowsWide || [];
+  ecRowsWide    = ecRowsWide    || [];
+  if (!narrowStart) return { labels: [], storeUnit: [], ecUnit: [] };
+
+  const anchor = new Date(narrowStart + 'T00:00:00');
+  const weekIndexOf = dateKey => Math.floor((new Date(dateKey + 'T00:00:00') - anchor) / (7*86400000));
+  const weekLabelOf = idx => {
+    const d = new Date(anchor.getTime() + idx*7*86400000);
+    return (d.getMonth()+1) + '/' + d.getDate();
+  };
+
+  // 直営店：取引単位にまとめてから週次集計（ECOM同様に明細の二重計上を避ける）
+  const txMap = {};
+  storeRowsWide.forEach(r => {
+    const tx = r.transaction_id;
+    if (!txMap[tx]) txMap[tx] = { date_key: r.date_key, total: 0 };
+    txMap[tx].total += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
+  });
+  const storeWeekMap = {};
+  Object.values(txMap).forEach(t => {
+    const wi = weekIndexOf(t.date_key);
+    if (!storeWeekMap[wi]) storeWeekMap[wi] = { sales: 0, customers: 0 };
+    storeWeekMap[wi].sales += t.total;
+    storeWeekMap[wi].customers++;
+  });
+
+  // EC：受注単位にまとめてから週次集計
+  const orderMap = {};
+  ecRowsWide.forEach(r => {
+    const oc = r.order_code;
+    if (!orderMap[oc]) orderMap[oc] = { date_key: r.date_key, grand_total: Number(r.grand_total || 0) };
+  });
+  const ecWeekMap = {};
+  Object.values(orderMap).forEach(o => {
+    const wi = weekIndexOf(o.date_key);
+    if (!ecWeekMap[wi]) ecWeekMap[wi] = { sales: 0, orders: 0 };
+    ecWeekMap[wi].sales += o.grand_total;
+    ecWeekMap[wi].orders++;
+  });
+
+  const allWeekIdx = [...new Set([...Object.keys(storeWeekMap), ...Object.keys(ecWeekMap)].map(Number))].sort((a,b) => a-b);
+  const labels    = allWeekIdx.map(weekLabelOf);
+  const storeUnit = allWeekIdx.map(wi => (storeWeekMap[wi] && storeWeekMap[wi].customers > 0) ? storeWeekMap[wi].sales / storeWeekMap[wi].customers : null);
+  const ecUnit    = allWeekIdx.map(wi => (ecWeekMap[wi] && ecWeekMap[wi].orders > 0) ? ecWeekMap[wi].sales / ecWeekMap[wi].orders : null);
+
+  return { labels, storeUnit, ecUnit };
 }
 
 async function loadStorecData() {
   if (!SESSION_TOKEN) return;
   const fmtD = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  const start = fmtD(dpState.applied.start);
-  const end   = fmtD(dpState.applied.end);
-  const periodKey = start + '_' + end;
+  const narrowStart = fmtD(dpState.applied.start);
+  const narrowEnd   = fmtD(dpState.applied.end);
+  const periodKey = narrowStart + '_' + narrowEnd;
 
   if (storecLoaded && storecLoadedPeriod === periodKey) {
     renderStorecTab();
     return;
   }
 
+  // 客単価の週次推移で「選択期間(約4〜5週)を中心に前後含め約20週」表示するため、
+  // 選択期間より広い範囲のデータを取得しておく。KPIや日別グラフ等は
+  // computeStorecAggregates 内で選択期間のみに絞り込んで使用する。
+  const periodDays   = Math.round((dpState.applied.end - dpState.applied.start) / 86400000) + 1;
+  const periodWeeks  = periodDays / 7;
+  const paddingWeeks = Math.max(0, (20 - periodWeeks) / 2);
+  const paddingMs    = paddingWeeks * 7 * 86400000;
+  const wideStart = fmtD(new Date(dpState.applied.start.getTime() - paddingMs));
+  const wideEnd   = fmtD(new Date(dpState.applied.end.getTime() + paddingMs));
+
   const tabEl = document.getElementById('tab-storec');
   tabEl.style.opacity = '0.5';
   try {
-    const url  = `${GAS_URL}?action=storec&token=${encodeURIComponent(SESSION_TOKEN)}&start=${start}&end=${end}`;
+    const url  = `${GAS_URL}?action=storec&token=${encodeURIComponent(SESSION_TOKEN)}&start=${wideStart}&end=${wideEnd}`;
     const data = await jsonp(url);
     if (!data.ok) throw new Error(data.error);
-    STOREC = computeStorecAggregates(data.storeRows, data.ecRows);
+    STOREC = computeStorecAggregates(data.storeRows, data.ecRows, narrowStart, narrowEnd);
     storecLoaded = true;
     storecLoadedPeriod = periodKey;
     renderStorecTab();
@@ -2250,26 +2321,16 @@ function renderStorecTab() {
     }
   });
 
-  // ---- 客単価 日別推移（直営店 × EC）----
-  // 日付(date_key)をキーに両者を突き合わせ、共通の日付軸で並べる
-  const dateKeyToDay = {};
-  sDaily.forEach(d => { dateKeyToDay[d.date_key] = d.day; });
-  eDaily.forEach(d => { dateKeyToDay[d.date_key] = d.day; });
-  const upDateKeys = Object.keys(dateKeyToDay).sort();
-  const upDays = upDateKeys.map(k => dateKeyToDay[k]);
-
-  const storeUnitByKey = {};
-  sDaily.forEach(d => { storeUnitByKey[d.date_key] = Number(d.customers||0) > 0 ? d.sales / d.customers : null; });
-  const ecUnitByKey = {};
-  eDaily.forEach(d => { ecUnitByKey[d.date_key] = Number(d.orders||0) > 0 ? d.sales / d.orders : null; });
+  // ---- 客単価 週次推移（直営店 × EC）----
+  const wup = STOREC.weeklyUnitPrice || { labels: [], storeUnit: [], ecUnit: [] };
 
   rebuildChart('sc-unit-price', {
     type: 'line',
     data: {
-      labels: upDays,
+      labels: wup.labels,
       datasets: [
-        { label: '客単価（直営店）', data: upDateKeys.map(k => storeUnitByKey[k] ?? null), borderColor: P.teal, backgroundColor: 'transparent', tension: 0.3, spanGaps: true, pointRadius: 3 },
-        { label: '客単価（EC）', data: upDateKeys.map(k => ecUnitByKey[k] ?? null), borderColor: P.compare, backgroundColor: 'transparent', tension: 0.3, spanGaps: true, pointRadius: 3 },
+        { label: '客単価（直営店）', data: wup.storeUnit, borderColor: P.teal, backgroundColor: 'transparent', tension: 0.3, spanGaps: true, pointRadius: 3 },
+        { label: '客単価（EC）', data: wup.ecUnit, borderColor: P.compare, backgroundColor: 'transparent', tension: 0.3, spanGaps: true, pointRadius: 3 },
       ]
     },
     options: {
