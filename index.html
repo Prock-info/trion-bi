@@ -1744,7 +1744,15 @@ let chprodPage_=0;
 const CHPROD_PAGE_SIZE=25;
 let chprodFullList=[];   // Excel出力用（ページネーション前の全件）
 let chprodChannels=[];
+let chprodSortChannel=null; // クリックされたチャネル名（null＝ドロップダウンのソートを使う）
+let chprodSortDir='desc';   // 'desc' | 'asc'
 function chprodPage(dir){chprodPage_+=dir;renderChannelProductTable()}
+function chprodSortByChannel(ch){
+  if(chprodSortChannel===ch){ chprodSortDir = chprodSortDir==='desc'?'asc':'desc'; }
+  else { chprodSortChannel=ch; chprodSortDir='desc'; }
+  chprodPage_=0;
+  renderChannelProductTable();
+}
 
 function renderChannelProductTable(){
   const search=(document.getElementById('chprod-search')||{value:''}).value.toLowerCase();
@@ -1757,6 +1765,7 @@ function renderChannelProductTable(){
   // 表示するチャネル列（実データから動的に決まる。順序はRAW.filters.channelsに準拠）
   const channels = (RAW.filters.channels && RAW.filters.channels.length) ? RAW.filters.channels : [...new Set(filteredRows.map(r=>r[RCH]))].sort();
   chprodChannels = channels;
+  if(chprodSortChannel && !channels.includes(chprodSortChannel)) chprodSortChannel=null; // フィルタ変更等でチャネルが消えた場合はリセット
 
   // 品番ごと×チャネルごとに販売数(qty_sold)を集計（現在の各種フィルタを反映）
   const pm={};
@@ -1773,18 +1782,29 @@ function renderChannelProductTable(){
   });
 
   if(search) list=list.filter(r=>r.product_name.toLowerCase().includes(search)||String(r.item_no).toLowerCase().includes(search));
-  if(sortKey==='code') list.sort((a,b)=>String(a.item_no).localeCompare(String(b.item_no)));
-  else list.sort((a,b)=>b.total-a.total);
+
+  if(chprodSortChannel){
+    const dir = chprodSortDir==='asc' ? 1 : -1;
+    list.sort((a,b)=> dir * ((a.chMap[chprodSortChannel]||0) - (b.chMap[chprodSortChannel]||0)));
+  } else if(sortKey==='code'){
+    list.sort((a,b)=>String(a.item_no).localeCompare(String(b.item_no)));
+  } else {
+    list.sort((a,b)=>b.total-a.total);
+  }
 
   chprodFullList=list; // Excel出力用に保持（ページング前の全件・現在の検索/並び替え反映済み）
 
-  // ヘッダー（動的にチャネル列を追加。列幅は均一にする）
+  // ヘッダー（動的にチャネル列を追加。列幅は均一にする。チャネル列はクリックで昇順/降順切替）
   const colCount = 4 + channels.length + 1; // #, 品番, 商品名, カテゴリ, ...channels, 合計
   const colWidth = (100/colCount).toFixed(2)+'%';
   const thStyle = `width:${colWidth};overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
   document.getElementById('chprod-thead').innerHTML =
     `<th style="${thStyle}">#</th><th style="${thStyle}">品番</th><th style="${thStyle}">商品名</th><th style="${thStyle}">カテゴリ</th>`
-    + channels.map(ch=>`<th class="num" style="${thStyle}" title="${ch}">${ch}</th>`).join('')
+    + channels.map(ch=>{
+        const active = chprodSortChannel===ch;
+        const arrow = active ? (chprodSortDir==='desc' ? ' ▼' : ' ▲') : '';
+        return `<th class="num" style="${thStyle}${active?';color:var(--accent)':''}" title="${ch}（クリックで並び替え）" onclick="chprodSortByChannel('${ch}')">${ch}${arrow}</th>`;
+      }).join('')
     + `<th class="num" style="${thStyle}">合計</th>`;
 
   const total=list.length;
