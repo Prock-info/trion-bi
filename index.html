@@ -6,6 +6,7 @@
 <title>TRION BI — Prock Lab.</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- GASプロキシ方式のためGSI不要 -->
 <style>
 /* ========== PROCK GLASSMORPHISM DESIGN ========== */
@@ -783,10 +784,11 @@ canvas { display:block; }
           <option value="total">合計数量順</option>
           <option value="code">品番順</option>
         </select>
+        <button onclick="exportChprodExcel()" style="padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--glass-bg);color:var(--navy);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;backdrop-filter:blur(8px)">📥 Excel出力</button>
       </div>
     </div>
-    <div class="tbl-scroll">
-      <table class="tbl" style="white-space:nowrap">
+    <div style="overflow-x:auto">
+      <table class="tbl" style="table-layout:fixed;width:100%">
         <thead><tr id="chprod-thead"></tr></thead>
         <tbody id="chprod-tbody"></tbody>
       </table>
@@ -1739,6 +1741,9 @@ function productPage(dir){productPage_+=dir;renderProductTable()}
 // 品番×チャネル（新タブ）
 // =====================================================================
 let chprodPage_=0;
+const CHPROD_PAGE_SIZE=25;
+let chprodFullList=[];   // Excel出力用（ページネーション前の全件）
+let chprodChannels=[];
 function chprodPage(dir){chprodPage_+=dir;renderChannelProductTable()}
 
 function renderChannelProductTable(){
@@ -1751,6 +1756,7 @@ function renderChannelProductTable(){
 
   // 表示するチャネル列（実データから動的に決まる。順序はRAW.filters.channelsに準拠）
   const channels = (RAW.filters.channels && RAW.filters.channels.length) ? RAW.filters.channels : [...new Set(filteredRows.map(r=>r[RCH]))].sort();
+  chprodChannels = channels;
 
   // 品番ごと×チャネルごとに販売数(qty_sold)を集計（現在の各種フィルタを反映）
   const pm={};
@@ -1770,28 +1776,52 @@ function renderChannelProductTable(){
   if(sortKey==='code') list.sort((a,b)=>String(a.item_no).localeCompare(String(b.item_no)));
   else list.sort((a,b)=>b.total-a.total);
 
-  // ヘッダー（動的にチャネル列を追加）
+  chprodFullList=list; // Excel出力用に保持（ページング前の全件・現在の検索/並び替え反映済み）
+
+  // ヘッダー（動的にチャネル列を追加。列幅は均一にする）
+  const colCount = 4 + channels.length + 1; // #, 品番, 商品名, カテゴリ, ...channels, 合計
+  const colWidth = (100/colCount).toFixed(2)+'%';
+  const thStyle = `width:${colWidth};overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
   document.getElementById('chprod-thead').innerHTML =
-    `<th>#</th><th>品番</th><th>商品名</th><th>カテゴリ</th>`
-    + channels.map(ch=>`<th class="num">${ch}</th>`).join('')
-    + `<th class="num">合計</th>`;
+    `<th style="${thStyle}">#</th><th style="${thStyle}">品番</th><th style="${thStyle}">商品名</th><th style="${thStyle}">カテゴリ</th>`
+    + channels.map(ch=>`<th class="num" style="${thStyle}" title="${ch}">${ch}</th>`).join('')
+    + `<th class="num" style="${thStyle}">合計</th>`;
 
   const total=list.length;
-  const start=chprodPage_*PAGE_SIZE;
-  const end=Math.min(start+PAGE_SIZE,total);
+  const start=chprodPage_*CHPROD_PAGE_SIZE;
+  const end=Math.min(start+CHPROD_PAGE_SIZE,total);
   const slice=list.slice(start,end);
 
+  const tdStyle='overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
   document.getElementById('chprod-tbody').innerHTML = slice.map((r,i)=>{
     const chCells = channels.map(ch=>{
       const v=r.chMap[ch]||0;
-      return `<td class="num${v===0?' muted':''}">${v||'—'}</td>`;
+      return `<td class="num${v===0?' muted':''}" style="${tdStyle}">${v||'—'}</td>`;
     }).join('');
-    return `<tr><td class="rank ${start+i<3?'top3':''}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500">${r.item_no}</td><td style="font-size:11px">${r.product_name}</td><td style="font-size:10px;color:var(--text3)">${r.category_name}</td>${chCells}<td class="num" style="font-weight:700">${r.total}</td></tr>`;
+    return `<tr><td class="rank ${start+i<3?'top3':''}" style="${tdStyle}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500;${tdStyle}" title="${r.item_no}">${r.item_no}</td><td style="font-size:11px;${tdStyle}" title="${r.product_name}">${r.product_name}</td><td style="font-size:10px;color:var(--text3);${tdStyle}" title="${r.category_name}">${r.category_name}</td>${chCells}<td class="num" style="font-weight:700;${tdStyle}">${r.total}</td></tr>`;
   }).join('');
 
   document.getElementById('chprod-info').textContent = total>0?`${start+1}〜${end} / ${total}件`:'0件';
   document.getElementById('chprod-prev').disabled = chprodPage_===0;
   document.getElementById('chprod-next').disabled = end>=total;
+}
+
+function exportChprodExcel(){
+  if(!chprodFullList.length){ alert('データがありません'); return; }
+  const header = ['品番','商品名','カテゴリ', ...chprodChannels, '合計'];
+  const rows = chprodFullList.map(r => [
+    r.item_no, r.product_name, r.category_name,
+    ...chprodChannels.map(ch => r.chMap[ch] || 0),
+    r.total
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  ws['!cols'] = header.map(() => ({ wch: 14 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '品番別チャネル別販売数');
+
+  const d = new Date();
+  const dateStr = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  XLSX.writeFile(wb, `品番別チャネル別販売数_${dateStr}.xlsx`);
 }
 
 
