@@ -579,6 +579,7 @@ canvas { display:block; }
   <div class="tab" onclick="showTab('channel',this)">チャネル分析</div>
   <div class="tab" onclick="showTab('md',this)">MD分析</div>
   <div class="tab" onclick="showTab('product',this)">商品分析</div>
+  <div class="tab" onclick="showTab('chprod',this)">品番×チャネル</div>
   <div class="tab" onclick="showTab('member',this)">会員分析</div>
   <div class="tab" onclick="showTab('inventory',this)">在庫</div>
   <div class="tab" onclick="showTab('replenishment',this)">補充検討</div>
@@ -764,6 +765,36 @@ canvas { display:block; }
         <button onclick="closeProductModal()" style="background:none;border:none;font-size:18px;color:var(--text3);cursor:pointer">✕</button>
       </div>
       <div id="modal-channel-table"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 品番×チャネル ====== -->
+<div id="tab-chprod" class="tab-content page">
+  <div class="card mb">
+    <div class="card-title" style="margin-bottom:10px">
+      <span>品番別 チャネル別 販売数</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" id="chprod-search" placeholder="品番 / 商品名…" oninput="renderChannelProductTable()">
+        </div>
+        <select class="pill-select" id="chprod-sort" onchange="renderChannelProductTable()">
+          <option value="total">合計数量順</option>
+          <option value="code">品番順</option>
+        </select>
+      </div>
+    </div>
+    <div class="tbl-scroll">
+      <table class="tbl" style="white-space:nowrap">
+        <thead><tr id="chprod-thead"></tr></thead>
+        <tbody id="chprod-tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <button class="page-btn" id="chprod-prev" onclick="chprodPage(-1)">← 前へ</button>
+      <span id="chprod-info" style="color:var(--text3)"></span>
+      <button class="page-btn" id="chprod-next" onclick="chprodPage(1)">次へ →</button>
     </div>
   </div>
 </div>
@@ -1705,6 +1736,66 @@ function renderProductTable(){
 function productPage(dir){productPage_+=dir;renderProductTable()}
 
 // =====================================================================
+// 品番×チャネル（新タブ）
+// =====================================================================
+let chprodPage_=0;
+function chprodPage(dir){chprodPage_+=dir;renderChannelProductTable()}
+
+function renderChannelProductTable(){
+  const search=(document.getElementById('chprod-search')||{value:''}).value.toLowerCase();
+  const sortKey=(document.getElementById('chprod-sort')||{value:'total'}).value;
+
+  // 品番/商品名/カテゴリの参照用マップ（全SKUから、フィルタの影響を受けず名称を引けるようにする）
+  const skuInfo={};
+  RAW.skus.forEach(r=>{ skuInfo[r[SK]] = { item_no:r[SH], product_name:r[SN], category_name:r[SCAT] }; });
+
+  // 表示するチャネル列（実データから動的に決まる。順序はRAW.filters.channelsに準拠）
+  const channels = (RAW.filters.channels && RAW.filters.channels.length) ? RAW.filters.channels : [...new Set(filteredRows.map(r=>r[RCH]))].sort();
+
+  // 品番ごと×チャネルごとに販売数(qty_sold)を集計（現在の各種フィルタを反映）
+  const pm={};
+  filteredRows.forEach(r=>{
+    const code=r[RC];
+    if(!pm[code]) pm[code]={};
+    pm[code][r[RCH]] = (pm[code][r[RCH]]||0) + r[RQ];
+  });
+
+  let list=Object.entries(pm).map(([code,chMap])=>{
+    const info=skuInfo[code]||{item_no:code,product_name:code,category_name:''};
+    const total=channels.reduce((s,ch)=>s+(chMap[ch]||0),0);
+    return { code, item_no:info.item_no, product_name:info.product_name, category_name:info.category_name, chMap, total };
+  });
+
+  if(search) list=list.filter(r=>r.product_name.toLowerCase().includes(search)||String(r.item_no).toLowerCase().includes(search));
+  if(sortKey==='code') list.sort((a,b)=>String(a.item_no).localeCompare(String(b.item_no)));
+  else list.sort((a,b)=>b.total-a.total);
+
+  // ヘッダー（動的にチャネル列を追加）
+  document.getElementById('chprod-thead').innerHTML =
+    `<th>#</th><th>品番</th><th>商品名</th><th>カテゴリ</th>`
+    + channels.map(ch=>`<th class="num">${ch}</th>`).join('')
+    + `<th class="num">合計</th>`;
+
+  const total=list.length;
+  const start=chprodPage_*PAGE_SIZE;
+  const end=Math.min(start+PAGE_SIZE,total);
+  const slice=list.slice(start,end);
+
+  document.getElementById('chprod-tbody').innerHTML = slice.map((r,i)=>{
+    const chCells = channels.map(ch=>{
+      const v=r.chMap[ch]||0;
+      return `<td class="num${v===0?' muted':''}">${v||'—'}</td>`;
+    }).join('');
+    return `<tr><td class="rank ${start+i<3?'top3':''}">${start+i+1}</td><td style="font-size:11px;color:var(--text2);font-weight:500">${r.item_no}</td><td style="font-size:11px">${r.product_name}</td><td style="font-size:10px;color:var(--text3)">${r.category_name}</td>${chCells}<td class="num" style="font-weight:700">${r.total}</td></tr>`;
+  }).join('');
+
+  document.getElementById('chprod-info').textContent = total>0?`${start+1}〜${end} / ${total}件`:'0件';
+  document.getElementById('chprod-prev').disabled = chprodPage_===0;
+  document.getElementById('chprod-next').disabled = end>=total;
+}
+
+
+// =====================================================================
 // STATIC CHARTS
 // =====================================================================
 function renderStatic(){
@@ -2447,6 +2538,7 @@ function renderAll(){
   else if(id==='channel')renderChannel();
   else if(id==='md')renderMD();
   else if(id==='product')renderProductTable();
+  else if(id==='chprod')renderChannelProductTable();
 }
 
 // =====================================================================
