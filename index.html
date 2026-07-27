@@ -714,21 +714,10 @@ canvas { display:block; }
 
   <div class="row2">
     <div class="card"><div class="card-title">カテゴリ別 売上 / 粗利 / 在庫</div><div style="height:280px"><canvas id="md-cat-bar"></canvas></div></div>
-    <div class="card"><div class="card-title">カテゴリ別 粗利率ランキング</div><div class="bar-list" id="cat-rate-list"></div></div>
+    <div class="card"><div class="card-title">シリーズ別売上 <span class="card-sub">TOP10（商品区分３ベース）</span></div><div style="height:280px"><canvas id="true-series-bar"></canvas></div></div>
   </div>
 
   <div class="row2">
-    <div class="card"><div class="card-title">カテゴリ別売上 <span class="card-sub">TOP10</span></div><div style="height:220px"><canvas id="series-bar"></canvas></div></div>
-    <div class="card"><div class="card-title">シーズン別 売上構成</div><div style="height:220px"><canvas id="md-season-bar"></canvas></div></div>
-  </div>
-
-  <div class="row2">
-    <div class="card"><div class="card-title">シリーズ別売上 <span class="card-sub">TOP10（商品区分３ベース）</span></div><div style="height:220px"><canvas id="true-series-bar"></canvas></div></div>
-    <div class="card"><div class="card-title">カラー別売上 <span class="card-sub">TOP10（BLACK×〇〇 等はベースカラーで集約）</span></div><div style="height:220px"><canvas id="md-color-bar"></canvas></div></div>
-  </div>
-
-  <div class="row2">
-    <div class="card"><div class="card-title">カテゴリ別 在庫金額 × 消化率</div><div style="height:220px"><canvas id="md-inv-scatter"></canvas></div></div>
     <div class="card">
       <div class="card-title">カテゴリ別 詳細</div>
       <div class="tbl-scroll">
@@ -742,7 +731,32 @@ canvas { display:block; }
         </tr></thead><tbody id="md-cat-tbl"></tbody></table>
       </div>
     </div>
+    <div class="card">
+      <div class="card-title">シリーズ別 詳細</div>
+      <div class="tbl-scroll">
+        <table class="tbl"><thead><tr>
+          <th>シリーズ</th>
+          <th class="num">売上</th>
+          <th class="num">粗利</th>
+          <th class="num">粗利率</th>
+          <th class="num">在庫金額</th>
+          <th class="num">消化率</th>
+        </tr></thead><tbody id="md-series-tbl"></tbody></table>
+      </div>
+    </div>
   </div>
+
+  <div class="row2">
+    <div class="card"><div class="card-title">カテゴリ別 粗利率ランキング</div><div class="bar-list" id="cat-rate-list"></div></div>
+    <div class="card"><div class="card-title">カテゴリ別売上 <span class="card-sub">TOP10</span></div><div style="height:220px"><canvas id="series-bar"></canvas></div></div>
+  </div>
+
+  <div class="row2">
+    <div class="card"><div class="card-title">シーズン別 売上構成</div><div style="height:220px"><canvas id="md-season-bar"></canvas></div></div>
+    <div class="card"><div class="card-title">カラー別売上 <span class="card-sub">TOP10（BLACK×〇〇 等はベースカラーで集約）</span></div><div style="height:220px"><canvas id="md-color-bar"></canvas></div></div>
+  </div>
+
+  <div class="card mb"><div class="card-title">カテゴリ別 在庫金額 × 消化率</div><div style="height:220px"><canvas id="md-inv-scatter"></canvas></div></div>
 </div>
 
 <!-- ====== PRODUCT ====== -->
@@ -1750,6 +1764,31 @@ function renderMD(){
     const strTxt = strNum != null ? strNum.toFixed(1)+'%' : '—';
     const strCol = strNum == null ? 'var(--text3)' : strNum>=50?'var(--green)':strNum>=30?'var(--amber)':'var(--red)';
     return `<tr><td style="font-weight:600">${c[0]}</td><td class="num">¥${fmtM(c[1].s)}</td><td class="num">¥${fmtM(c[1].g)}</td><td class="num ${grClass(parseFloat(gr)||0)}">${gr}%</td><td class="num">${invVal>0?'¥'+fmtM(invVal):'—'}</td><td class="num" style="color:${strCol};font-weight:600">${strTxt}</td></tr>`;
+  }).join('');
+
+  // シリーズ別詳細テーブル（商品区分３ベース。カテゴリ別詳細と同じ形式で対にする）
+  // 在庫・消化率のバックエンド集計（v_sell_through）はカテゴリ単位でしか持っていないため、
+  // ここではSKU単位の在庫数・在庫金額をシリーズでロールアップして算出する
+  const smTbl = {};
+  filteredSkus.forEach(r => {
+    const ser = r[SSER] || '不明';
+    if(!smTbl[ser]) smTbl[ser] = { s:0, g:0, stockValue:0, qty:0, stockQty:0 };
+    smTbl[ser].s += r[SS];
+    smTbl[ser].g += r[SG];
+    smTbl[ser].stockValue += (r[15] || 0);
+    smTbl[ser].qty += (r[SQ] || 0);
+    smTbl[ser].stockQty += (r[SI] || 0);
+  });
+  const sersTbl = Object.entries(smTbl).filter(s => s[1].s > 0).sort((a,b) => b[1].s - a[1].s);
+  const serTblEl = el('md-series-tbl');
+  if(serTblEl) serTblEl.innerHTML = sersTbl.map(s => {
+    const gr = s[1].s > 0 ? (s[1].g/s[1].s*100).toFixed(1) : '—';
+    const invVal = s[1].stockValue;
+    const denom = s[1].qty + s[1].stockQty;
+    const strNum = denom > 0 ? s[1].qty/denom*100 : null;
+    const strTxt = strNum != null ? strNum.toFixed(1)+'%' : '—';
+    const strCol = strNum == null ? 'var(--text3)' : strNum>=50?'var(--green)':strNum>=30?'var(--amber)':'var(--red)';
+    return `<tr><td style="font-weight:600">${s[0]}</td><td class="num">¥${fmtM(s[1].s)}</td><td class="num">¥${fmtM(s[1].g)}</td><td class="num ${grClass(parseFloat(gr)||0)}">${gr}%</td><td class="num">${invVal>0?'¥'+fmtM(invVal):'—'}</td><td class="num" style="color:${strCol};font-weight:600">${strTxt}</td></tr>`;
   }).join('');
 }
 
