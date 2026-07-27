@@ -718,8 +718,13 @@ canvas { display:block; }
   </div>
 
   <div class="row2">
-    <div class="card"><div class="card-title">シリーズ別 売上 <span class="card-sub">TOP10</span></div><div style="height:220px"><canvas id="series-bar"></canvas></div></div>
+    <div class="card"><div class="card-title">カテゴリ別売上 <span class="card-sub">TOP10</span></div><div style="height:220px"><canvas id="series-bar"></canvas></div></div>
     <div class="card"><div class="card-title">シーズン別 売上構成</div><div style="height:220px"><canvas id="md-season-bar"></canvas></div></div>
+  </div>
+
+  <div class="row2">
+    <div class="card"><div class="card-title">シリーズ別売上 <span class="card-sub">TOP10（商品区分３ベース）</span></div><div style="height:220px"><canvas id="true-series-bar"></canvas></div></div>
+    <div class="card"><div class="card-title">カラー別売上 <span class="card-sub">TOP10（BLACK×〇〇 等はベースカラーで集約）</span></div><div style="height:220px"><canvas id="md-color-bar"></canvas></div></div>
   </div>
 
   <div class="row2">
@@ -1409,6 +1414,14 @@ function fmtM(n){
   return Math.round(n).toLocaleString('ja-JP');
 }
 function grClass(v){return v>=65?'gr-h':v>=55?'gr-m':'gr-l'}
+// "Black x Orange"のような複合色名から先頭のベースカラーだけを取り出す
+// （BLACK×〇〇 系の色をユニーク集計するとカラー数が膨大になるため、ベースカラーで集約する）
+function normalizeColor(color){
+  if(!color) return '不明';
+  const parts = String(color).split(/\s*[x×]\s*/i);
+  const base = (parts[0] || '').trim();
+  return base || '不明';
+}
 function dCol(v){return v>=80?'#16A34A':v>=40?P.amber:P.red}
 function pill(ch){const m={
   'ONLINE STORE':'pill-ec', 'EC':'pill-ec',
@@ -1661,12 +1674,23 @@ function renderMD(){
     return `<div class="bar-row"><div class="bar-lbl" style="min-width:80px;font-size:9px">${c[0]}</div><div class="bar-track"><div class="bar-fill" style="width:${r}%;background:${col}"></div></div><div class="bar-cnt" style="color:${col}">${r}%</div></div>`;
   }).join('');
 
+  // カテゴリ別売上（TOP10・シンプル横棒。md-cat-barの詳細版とは別に簡易ランキングとして表示）
+  const cm2 = {};
+  rows.forEach(r => { if(!cm2[r[RCAT]])cm2[r[RCAT]]=0; cm2[r[RCAT]]+=r[RS]; });
+  const cats2 = Object.entries(cm2).filter(c=>c[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  rebuildChart('series-bar', {
+    type:'bar',
+    data:{labels:cats2.map(c=>c[0]),datasets:[{data:cats2.map(c=>c[1]),backgroundColor:[P.teal,P.blue,P.green,P.lime,'#92F1F6','#C2FFDF','#E9FFD6',P.gray,P.gray2,P.navy2],borderRadius:4,borderSkipped:false}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'}},y:{grid:{display:false}}}}
+  });
+
+  // シリーズ別売上（商品区分３ベースの本当のシリーズ。カテゴリより細かい粒度）
   const sm = {};
   rows.forEach(r => { if(!sm[r[RSER]])sm[r[RSER]]=0; sm[r[RSER]]+=r[RS]; });
   const sers = Object.entries(sm).filter(s=>s[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  rebuildChart('series-bar', {
+  if(el('true-series-bar')) rebuildChart('true-series-bar', {
     type:'bar',
-    data:{labels:sers.map(s=>s[0]),datasets:[{data:sers.map(s=>s[1]),backgroundColor:[P.teal,P.blue,P.green,P.lime,'#92F1F6','#C2FFDF','#E9FFD6',P.gray,P.gray2,P.navy2],borderRadius:4,borderSkipped:false}]},
+    data:{labels:sers.map(s=>s[0]),datasets:[{data:sers.map(s=>s[1]),backgroundColor:[P.compare,P.amber,P.teal,P.blue,P.green,P.lime,'#92F1F6','#C2FFDF','#E9FFD6',P.gray],borderRadius:4,borderSkipped:false}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'}},y:{grid:{display:false}}}}
   });
 
@@ -1684,6 +1708,22 @@ function renderMD(){
     type:'doughnut',
     data:{labels:seasons.map(s=>s[0]),datasets:[{data:seasons.map(s=>s[1]),backgroundColor:[P.teal,P.blue,P.green,P.lime,'#92F1F6','#C2FFDF','#E9FFD6',P.gray,P.gray2,P.navy2],borderWidth:2,borderColor:'#fff'}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'50%',plugins:{legend:{position:'right',labels:{boxWidth:8,font:{size:10}}}}}
+  });
+
+  // カラー別売上（"Black x Orange"のような複合色は先頭の色（ベースカラー）でまとめる）
+  const skuColorMap = {};
+  RAW.skus.forEach(s => { skuColorMap[s[SK]] = s[SC]; });
+  const colorM = {};
+  rows.forEach(r => {
+    const base = normalizeColor(skuColorMap[r[RC]]);
+    if(!colorM[base]) colorM[base] = 0;
+    colorM[base] += r[RS];
+  });
+  const colorsList = Object.entries(colorM).filter(c=>c[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  if(el('md-color-bar')) rebuildChart('md-color-bar', {
+    type:'bar',
+    data:{labels:colorsList.map(c=>c[0]),datasets:[{data:colorsList.map(c=>c[1]),backgroundColor:[P.teal,P.blue,P.green,P.lime,'#92F1F6','#C2FFDF','#E9FFD6',P.gray,P.gray2,P.navy2],borderRadius:4,borderSkipped:false}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'}},y:{grid:{display:false}}}}
   });
 
   // カテゴリ別在庫×消化率散布図
@@ -3113,7 +3153,7 @@ async function loadBigQueryData() {
       r.product_code   ?? '',
       r.channel        ?? '',
       r.category_name  ?? '',
-      r.series_name    ?? '',
+      r.category3_name ?? '',  // 商品区分３ベースの本当のシリーズ
       Number(r.net_sales    ?? 0),
       Number(r.gross_profit ?? 0),
       Number(r.qty_sold     ?? 0),
@@ -3125,7 +3165,7 @@ async function loadBigQueryData() {
       r.product_code   ?? '',
       r.channel        ?? '',
       r.category_name  ?? '',
-      r.series_name    ?? '',
+      r.category3_name ?? '',
       Number(r.net_sales    ?? 0),
       Number(r.gross_profit ?? 0),
       Number(r.qty_sold     ?? 0),
