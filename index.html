@@ -1700,14 +1700,32 @@ function renderMD(){
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'}},y:{grid:{display:false}}}}
   });
 
-  // シリーズ別売上（商品区分３ベースの本当のシリーズ。カテゴリより細かい粒度）
-  const sm = {};
-  rows.forEach(r => { if(!sm[r[RSER]])sm[r[RSER]]=0; sm[r[RSER]]+=r[RS]; });
-  const sers = Object.entries(sm).filter(s=>s[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  // シリーズ別 売上/粗利/在庫（商品区分３ベースの本当のシリーズ。カテゴリ別グラフと形式を揃える）
+  // 在庫・消化率のバックエンド集計（v_sell_through）はカテゴリ単位でしか持っていないため、
+  // ここではSKU単位の在庫数・在庫金額をシリーズでロールアップして算出する
+  const smTbl = {};
+  filteredSkus.forEach(r => {
+    const ser = r[SSER] || '不明';
+    if(!smTbl[ser]) smTbl[ser] = { s:0, g:0, stockValue:0, qty:0, stockQty:0 };
+    smTbl[ser].s += r[SS];
+    smTbl[ser].g += r[SG];
+    smTbl[ser].stockValue += (r[15] || 0);
+    smTbl[ser].qty += (r[SQ] || 0);
+    smTbl[ser].stockQty += (r[SI] || 0);
+  });
+  const sersTbl = Object.entries(smTbl).filter(s => s[1].s > 0).sort((a,b) => b[1].s - a[1].s);
+  const sersTop10 = sersTbl.slice(0, 10);
   if(el('true-series-bar')) rebuildChart('true-series-bar', {
-    type:'bar',
-    data:{labels:sers.map(s=>s[0]),datasets:[{data:sers.map(s=>s[1]),backgroundColor:[P.compare,P.amber,P.teal,P.blue,P.green,P.lime,'#92F1F6','#C2FFDF','#E9FFD6',P.gray],borderRadius:4,borderSkipped:false}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'}},y:{grid:{display:false}}}}
+    type: 'bar',
+    data: {
+      labels: sersTop10.map(s => s[0]),
+      datasets: [
+        {label:'売上',    data:sersTop10.map(s=>s[1].s),          backgroundColor:P.teal+'CC', borderRadius:4, borderSkipped:false},
+        {label:'粗利',    data:sersTop10.map(s=>s[1].g),          backgroundColor:P.lime+'AA', borderRadius:4, borderSkipped:false},
+        {label:'在庫金額',data:sersTop10.map(s=>s[1].stockValue), backgroundColor:P.amber+'88',borderRadius:4, borderSkipped:false},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:8,padding:10}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'}}}}
   });
 
   // シーズン別売上
@@ -1767,19 +1785,6 @@ function renderMD(){
   }).join('');
 
   // シリーズ別詳細テーブル（商品区分３ベース。カテゴリ別詳細と同じ形式で対にする）
-  // 在庫・消化率のバックエンド集計（v_sell_through）はカテゴリ単位でしか持っていないため、
-  // ここではSKU単位の在庫数・在庫金額をシリーズでロールアップして算出する
-  const smTbl = {};
-  filteredSkus.forEach(r => {
-    const ser = r[SSER] || '不明';
-    if(!smTbl[ser]) smTbl[ser] = { s:0, g:0, stockValue:0, qty:0, stockQty:0 };
-    smTbl[ser].s += r[SS];
-    smTbl[ser].g += r[SG];
-    smTbl[ser].stockValue += (r[15] || 0);
-    smTbl[ser].qty += (r[SQ] || 0);
-    smTbl[ser].stockQty += (r[SI] || 0);
-  });
-  const sersTbl = Object.entries(smTbl).filter(s => s[1].s > 0).sort((a,b) => b[1].s - a[1].s);
   const serTblEl = el('md-series-tbl');
   if(serTblEl) serTblEl.innerHTML = sersTbl.map(s => {
     const gr = s[1].s > 0 ? (s[1].g/s[1].s*100).toFixed(1) : '—';
