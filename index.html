@@ -849,7 +849,7 @@ canvas { display:block; }
 <div id="tab-member" class="tab-content page">
   <div class="card mb">
     <div class="card-title" style="margin-bottom:10px">
-      <span>会員 × 商品 クロス集計</span>
+      <span>会員 × 商品 クロス集計 <span class="card-sub" id="mc-data-range">（全期間集計・期間絞り込み対象外）</span></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="flabel">行軸</span>
         <select class="pill-select" id="mc-row-axis" onchange="renderMemberCrossPivot()">
@@ -2672,10 +2672,22 @@ async function loadMemberCrossData() {
       age_group:            r.age_group             || '不明',
       gender_code:          r.gender_code           || '不明',
       purchase_count_group: r.purchase_count_group  || '不明',
+      order_year:           r.order_year            || null, // 将来の前年比較UI用（現時点では未使用）
       total_qty:            Number(r.total_qty       || 0),
       total_sales:          Number(r.total_sales     || 0),
       order_line_cnt:       Number(r.order_line_cnt  || 0),
     }));
+
+    // 集計対象の実データ期間をバッジに表示（このタブは期間ピッカーの絞り込み対象外のため）
+    const rangeEl = document.getElementById('mc-data-range');
+    if (rangeEl) {
+      if (data.dataRange && data.dataRange.min && data.dataRange.max) {
+        rangeEl.textContent = `（全期間集計：${data.dataRange.min} 〜 ${data.dataRange.max} ・期間ピッカーの絞り込み対象外）`;
+      } else {
+        rangeEl.textContent = '（全期間集計・期間絞り込み対象外）';
+      }
+    }
+
     memberCrossLoaded = true;
     renderMemberCrossPivot();
   } catch(e) {
@@ -2718,6 +2730,10 @@ function renderMemberCrossPivot() {
   const rowTotals = {};
   rowSet.forEach(rv => { rowTotals[rv] = Object.values(pivot[rv] || {}).reduce((a,b) => a+b, 0); });
 
+  // 構成比は「表示を50件に絞る前」の全件合計を分母にする
+  const grandTotalFull = Object.values(rowTotals).reduce((a,b) => a+b, 0);
+  const pct = v => grandTotalFull > 0 ? (v / grandTotalFull * 100).toFixed(1) + '%' : '—';
+
   let rows = [...rowSet].sort((a,b) => rowTotals[b] - rowTotals[a]);
   const cols = [...colSet].sort((a,b) => {
     const ta = rows.reduce((s,r) => s + (pivot[r][a] || 0), 0);
@@ -2734,27 +2750,31 @@ function renderMemberCrossPivot() {
     noteEl.textContent = '';
   }
 
-  let html = '<table class="tbl"><thead><tr><th>' + mcAxisLabel(rowField) + '</th>';
+  // 1列目（行ラベル）を横スクロールしても固定表示するためのスタイル
+  const stickyColHeadStyle = 'position:sticky;left:0;z-index:2;background:rgba(255,255,255,.95)';
+  const stickyColBodyStyle = 'position:sticky;left:0;z-index:1;background:rgba(255,255,255,.92);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+
+  let html = `<table class="tbl"><thead><tr><th style="${stickyColHeadStyle}">` + mcAxisLabel(rowField) + '</th>';
   cols.forEach(c => { html += `<th class="num">${c}</th>`; });
   html += '<th class="num" style="font-weight:700">合計</th></tr></thead><tbody>';
 
   rows.forEach(r => {
-    html += `<tr><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r}">${r}</td>`;
+    html += `<tr><td style="${stickyColBodyStyle}" title="${r}">${r}</td>`;
     cols.forEach(c => {
       const v = (pivot[r] && pivot[r][c]) || 0;
       html += `<td class="num${v === 0 ? ' muted' : ''}">${v ? fmtVal(v) : '—'}</td>`;
     });
-    html += `<td class="num" style="font-weight:700">${fmtVal(rowTotals[r])}</td></tr>`;
+    html += `<td class="num" style="font-weight:700">${fmtVal(rowTotals[r])}<div style="font-size:9px;color:var(--text3);font-weight:400">${pct(rowTotals[r])}</div></td></tr>`;
   });
 
   let grandTotal = 0;
-  html += '<tr style="border-top:2px solid var(--glass-border);font-weight:700"><td>合計</td>';
+  html += `<tr style="border-top:2px solid var(--glass-border);font-weight:700"><td style="${stickyColHeadStyle}">合計</td>`;
   cols.forEach(c => {
     const colTotal = rows.reduce((s,r) => s + ((pivot[r] && pivot[r][c]) || 0), 0);
     grandTotal += colTotal;
-    html += `<td class="num">${fmtVal(colTotal)}</td>`;
+    html += `<td class="num">${fmtVal(colTotal)}<div style="font-size:9px;color:var(--text3);font-weight:400">${pct(colTotal)}</div></td>`;
   });
-  html += `<td class="num">${fmtVal(grandTotal)}</td></tr>`;
+  html += `<td class="num">${fmtVal(grandTotal)}<div style="font-size:9px;color:var(--text3);font-weight:400">${pct(grandTotal)}</div></td></tr>`;
   html += '</tbody></table>';
 
   document.getElementById('mc-pivot-table').innerHTML = html;
