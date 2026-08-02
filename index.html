@@ -3002,15 +3002,37 @@ function renderInvCatChart() {
   });
 }
 
+// シーズン名（例: "2026SS", "2018AW①"）から年・SS/AW・枝番を取り出し、時系列順ソート用のキーを作る
+function seasonSortKey(name) {
+  const s = String(name || '');
+  const m = s.match(/(\d{4})\s*(SS|AW)/i);
+  if (!m) return { year: 9999, half: 9, suffix: 0 }; // 想定外の形式は末尾へ
+  const year = parseInt(m[1], 10);
+  const half = m[2].toUpperCase() === 'SS' ? 0 : 1; // SS(春夏)を先、AW(秋冬)を後に
+  const circledMap = { '①':1, '②':2, '③':3, '④':4, '⑤':5, '⑥':6, '⑦':7, '⑧':8, '⑨':9 };
+  const suffixChar = Object.keys(circledMap).find(c => s.includes(c));
+  const suffix = suffixChar ? circledMap[suffixChar] : 0;
+  return { year, half, suffix };
+}
+function seasonCompare(a, b) {
+  const ka = seasonSortKey(a.season_name);
+  const kb = seasonSortKey(b.season_name);
+  if (ka.year !== kb.year) return ka.year - kb.year;
+  if (ka.half !== kb.half) return ka.half - kb.half;
+  return ka.suffix - kb.suffix;
+}
+
 function renderInvSeasonChart() {
   const ctx = document.getElementById('inv-season-bar');
   if (!ctx || !INV) return;
   if (invSeasonChart) { invSeasonChart.destroy(); invSeasonChart = null; }
 
-  const data = [...INV.seasonInv]
+  // 在庫のあるシーズンを、時系列順（古い→新しい、グラフ左→右）に並べる。
+  // シーズン数が多い場合は直近12シーズンに絞る。
+  const sorted = [...INV.seasonInv]
     .filter(r => Number(r.stock_value) > 0)
-    .sort((a,b) => Number(b.stock_value) - Number(a.stock_value))
-    .slice(0, 12);
+    .sort(seasonCompare);
+  const data = sorted.length > 12 ? sorted.slice(-12) : sorted;
 
   const rates = data.map(r => Number(r.sell_through_rate || 0) * 100);
   const colors = rates.map(v => v >= 80 ? 'rgba(91,232,160,0.8)' : v >= 40 ? 'rgba(61,214,200,0.8)' : 'rgba(240,92,92,0.8)');
