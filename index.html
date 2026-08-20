@@ -1097,6 +1097,12 @@ function fmtDateShort(d) {
   if(!d) return '';
   return (d.getMonth()+1)+'/'+d.getDate();
 }
+// 比較期間の表示専用。「比較: 7/1→7/31」のように年が省略されると
+// 前年同期間との区別がつかず分かりにくいため、年を含めた短縮表記にする。
+function fmtDateShortY(d) {
+  if(!d) return '';
+  return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate();
+}
 function fmtDateInput(d) {
   if(!d) return '';
   return d.getFullYear()+'/'+(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0');
@@ -1297,17 +1303,26 @@ function applyDatePicker(){
   // Update trigger text
   const mainText=fmtDateShort(dpState.start)+' → '+fmtDateShort(dpState.end);
   document.getElementById('dp-trigger-text').textContent=mainText;
+  // 比較期間ラベル用の補足（前年／前の期間／カスタムのどれで比較しているか）
+  const cmpPresetLabel = (() => {
+    const activeEl = document.querySelector('#cmp-preset-prev-period.active,#cmp-preset-prev-year.active,#cmp-preset-custom.active');
+    if (!activeEl) return '';
+    if (activeEl.id === 'cmp-preset-prev-year')   return '前年同期間';
+    if (activeEl.id === 'cmp-preset-prev-period') return '前の期間';
+    return 'カスタム';
+  })();
   const cmpEl=document.getElementById('dp-trigger-compare');
   if(dpState.compareOn&&dpState.cmpStart&&dpState.cmpEnd){
-    cmpEl.textContent='比較: '+fmtDateShort(dpState.cmpStart)+' → '+fmtDateShort(dpState.cmpEnd);
+    // v12: 年を省略すると「今期と同じ期間」に見えて分かりにくいため、年を含む表記に変更
+    cmpEl.textContent='比較: '+fmtDateShortY(dpState.cmpStart)+' → '+fmtDateShortY(dpState.cmpEnd);
     cmpEl.style.display='inline';
   } else cmpEl.style.display='none';
   // Update compare banner
   const banner=document.getElementById('compare-banner');
   if(dpState.compareOn&&dpState.cmpStart&&dpState.cmpEnd){
     banner.classList.add('show');
-    document.getElementById('cmp-banner-text').textContent=fmtDateShort(dpState.cmpStart)+' → '+fmtDateShort(dpState.cmpEnd);
-    document.getElementById('cmp-banner-sub').textContent='（比較期間）';
+    document.getElementById('cmp-banner-text').textContent=fmtDateShortY(dpState.cmpStart)+' → '+fmtDateShortY(dpState.cmpEnd);
+    document.getElementById('cmp-banner-sub').textContent=cmpPresetLabel ? `（${cmpPresetLabel}）` : '（比較期間）';
     document.getElementById('cmp-col-head').style.display='table-cell';
   } else {
     banner.classList.remove('show');
@@ -1323,6 +1338,7 @@ function applyDatePicker(){
 // =====================================================================
 let filteredRows=RAW.rows.slice();
 let filteredPrevRows=[];
+let filteredCmpRows=[];   // v12: 日付ピッカーの「比較期間」実データ（フィルタ適用後）
 let filteredSkus=RAW.skus.slice();
 let productPage_=0;
 const PAGE_SIZE=30;
@@ -1348,6 +1364,7 @@ function applyFilters(){
   };
   filteredRows=RAW.rows.filter(predicate);
   filteredPrevRows=(RAW.prevRows||[]).filter(predicate);
+  filteredCmpRows=(RAW.cmpRows||[]).filter(predicate);
   filteredSkus=RAW.skus.filter(r=>{
     if(cat&&r[SCAT]!==cat) return false;
     if(ser&&r[SSER]!==ser) return false;
@@ -1363,6 +1380,7 @@ function resetFilters(){
   ['f-brand','f-channel','f-category','f-series','f-season'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   filteredRows=RAW.rows.slice();
   filteredPrevRows=(RAW.prevRows||[]).slice();
+  filteredCmpRows=(RAW.cmpRows||[]).slice();
   filteredSkus=RAW.skus.slice();
   document.getElementById('filter-count').textContent='全601件';
   productPage_=0;
@@ -1436,15 +1454,20 @@ function renderSummary(){
   document.getElementById('h-grate').textContent=gr+'%';
   document.getElementById('h-sku').innerHTML=sku+'<span>SKU</span>';
 
-  // Compare display (note: current data has no date so compare = same data with label)
+  // 比較期間表示（v12: filteredCmpRows＝実際に選択された比較期間の実データを使用。
+  // 以前は「今期売上 × 0.92」という仮計算で、%差分もテーブルに出せていなかった）
   const cmpOn=dpState.applied.compareOn&&dpState.applied.cmpStart&&dpState.applied.cmpEnd;
-  ['h-cmp-sales','h-cmp-gross','h-cmp-grate'].forEach(id=>document.getElementById(id).style.display=cmpOn?'block':'none');
-  if(cmpOn){
-    // For demo: compare period shows same data with slight variation
-    const cmpSales=sales*0.92;
-    const cmpGross=gross*0.91;
+  const cmpHasData = cmpOn && filteredCmpRows.length > 0;
+  ['h-cmp-sales','h-cmp-gross','h-cmp-grate'].forEach(id=>document.getElementById(id).style.display=cmpHasData?'block':'none');
+  const cmpSales = filteredCmpRows.reduce((s,r)=>s+r[RS],0);
+  const cmpGross = filteredCmpRows.reduce((s,r)=>s+r[RG],0);
+  const cmpGrate = cmpSales>0 ? (cmpGross/cmpSales*100) : 0;
+  if(cmpHasData){
     document.getElementById('h-cmp-sales').innerHTML='比較: ¥'+fmtM(cmpSales)+' '+diffHtml(sales,cmpSales);
     document.getElementById('h-cmp-gross').innerHTML='比較: ¥'+fmtM(cmpGross)+' '+diffHtml(gross,cmpGross);
+    const grateDiff = Number(gr) - cmpGrate;
+    const grateDiffTxt = Math.abs(grateDiff)<0.1 ? `<span style="font-size:10px;color:var(--text3)">±0pt</span>` : (grateDiff>0 ? `<span style="font-size:10px;color:#16A34A">▲${grateDiff.toFixed(1)}pt</span>` : `<span style="font-size:10px;color:var(--red)">▼${Math.abs(grateDiff).toFixed(1)}pt</span>`);
+    document.getElementById('h-cmp-grate').innerHTML='比較: '+cmpGrate.toFixed(1)+'% '+grateDiffTxt;
   }
 
   // Channel data
@@ -1454,6 +1477,8 @@ function renderSummary(){
   // 予算・前年実績（チャネル別）
   const brandFilter=document.getElementById('f-brand')?document.getElementById('f-brand').value:'';
   const {py,bg}=aggChannelExtra(filteredPrevRows,brandFilter);
+  // 比較期間（チャネル別。v12: 実データ）
+  const cmpChM = aggRows(filteredCmpRows);
 
   // Bar chart — with compare overlay + 予算 + 前年実績
   const datasets=[
@@ -1462,8 +1487,8 @@ function renderSummary(){
     {label:'予算',data:cl.map(c=>bg[c[0]]||0),backgroundColor:'rgba(15,35,64,.15)',borderRadius:5,borderSkipped:false,borderColor:'rgba(15,35,64,.4)',borderWidth:1},
     {label:'前年実績',data:cl.map(c=>py[c[0]]||0),backgroundColor:'rgba(148,163,184,.35)',borderRadius:5,borderSkipped:false},
   ];
-  if(cmpOn){
-    datasets.push({label:'比較期間売上',data:cl.map(c=>c[1].s*0.92),backgroundColor:'rgba(124,58,237,.2)',borderRadius:5,borderSkipped:false,borderColor:'rgba(124,58,237,.5)',borderWidth:1});
+  if(cmpHasData){
+    datasets.push({label:'比較期間売上',data:cl.map(c=>(cmpChM[c[0]]&&cmpChM[c[0]].s)||0),backgroundColor:'rgba(124,58,237,.2)',borderRadius:5,borderSkipped:false,borderColor:'rgba(124,58,237,.5)',borderWidth:1});
   }
   rebuildChart('ch-bar',{type:'bar',data:{labels:cl.map(c=>c[0]),datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:8,padding:12}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>'¥'+Math.round(v/1e6)+'M'},grid:{color:'#F0F4F8'}}}}});
 
@@ -1483,10 +1508,12 @@ function renderSummary(){
   renderMonthlySales();
 
   // Ch table（+ 予算・予算比・予算差・前年実績・前年比・前年差）
-  const cmpColVisible=cmpOn;
+  // v12: 比較売上列に実データ＋%差分を表示（従来は仮計算値かつ%差分なし）
+  const cmpColVisible=cmpHasData;
   document.getElementById('ch-tbl').innerHTML=cl.map(c=>{
     const gr2=c[1].s>0?(c[1].g/c[1].s*100).toFixed(1):'0.0';
-    const cmpSalesTd=cmpColVisible?`<td class="num cmp-val">¥${fmtM(c[1].s*0.92)}</td>`:'';
+    const cmpVal=(cmpChM[c[0]]&&cmpChM[c[0]].s)||0;
+    const cmpSalesTd=cmpColVisible?`<td class="num cmp-val">¥${fmtM(cmpVal)}<br>${diffHtml(c[1].s,cmpVal)}</td>`:'';
     const budget=bg[c[0]]||0;
     const budgetRate=budget>0?(c[1].s/budget*100).toFixed(1)+'%':'—';
     const budgetDiff=budget>0?diffAmountHtml(c[1].s-budget):'—';
@@ -3128,12 +3155,13 @@ async function loadLatestPeriod() {
     const mainText = fmtDateShort(dpState.start) + ' → ' + fmtDateShort(dpState.end);
     document.getElementById('dp-trigger-text').textContent = mainText;
     const cmpEl = document.getElementById('dp-trigger-compare');
-    cmpEl.textContent = '比較: ' + fmtDateShort(dpState.cmpStart) + ' → ' + fmtDateShort(dpState.cmpEnd);
+    // v12: 年を省略すると今期と同じ表記に見えてしまうため、年を含む表記にする
+    cmpEl.textContent = '比較: ' + fmtDateShortY(dpState.cmpStart) + ' → ' + fmtDateShortY(dpState.cmpEnd);
     cmpEl.style.display = 'inline';
     document.getElementById('hero-period-label').textContent = fmtDate(dpState.start) + ' 〜 ' + fmtDate(dpState.end);
     document.getElementById('compare-banner').classList.add('show');
-    document.getElementById('cmp-banner-text').textContent = fmtDateShort(dpState.cmpStart) + ' → ' + fmtDateShort(dpState.cmpEnd);
-    document.getElementById('cmp-banner-sub').textContent = '（比較期間）';
+    document.getElementById('cmp-banner-text').textContent = fmtDateShortY(dpState.cmpStart) + ' → ' + fmtDateShortY(dpState.cmpEnd);
+    document.getElementById('cmp-banner-sub').textContent = '（前年同期間）';
     document.getElementById('cmp-col-head').style.display = 'table-cell';
     document.getElementById('compare-toggle').classList.add('on');
     document.getElementById('dp-cmp-row').style.display = 'flex';
@@ -3224,7 +3252,12 @@ async function loadBigQueryData() {
     const start = fmt(dpState.start);
     const end   = fmt(dpState.end);
 
-    const url  = `${GAS_URL}?action=query&token=${encodeURIComponent(SESSION_TOKEN)}&start=${start}&end=${end}`;
+    let url = `${GAS_URL}?action=query&token=${encodeURIComponent(SESSION_TOKEN)}&start=${start}&end=${end}`;
+    // 比較トグルONかつ比較期間が選択されている場合のみ、その期間の実データも同時取得する
+    const cmpActive = dpState.applied.compareOn && dpState.applied.cmpStart && dpState.applied.cmpEnd;
+    if (cmpActive) {
+      url += `&cmpStart=${fmt(dpState.applied.cmpStart)}&cmpEnd=${fmt(dpState.applied.cmpEnd)}`;
+    }
     const data = await jsonp(url);
 
     if (!data.ok) {
@@ -3249,8 +3282,21 @@ async function loadBigQueryData() {
       r.sale_date ?? '',  // index 8: 商品詳細モーダルの週別トレンド用（v9で追加）
     ]);
 
-    // 前年同期間データ（前年比較用。以前は取得のみで未使用だった）
+    // 前年同期間データ（YoY専用。常に前年同日付。比較トグルの状態とは無関係）
     RAW.prevRows = (data.prevRows || []).map(r => [
+      r.product_code   ?? '',
+      r.channel        ?? '',
+      r.category_name  ?? '',
+      r.category3_name ?? '',
+      Number(r.net_sales    ?? 0),
+      Number(r.gross_profit ?? 0),
+      Number(r.qty_sold     ?? 0),
+      r.category1_name ?? 'TRION',
+    ]);
+
+    // 比較期間データ（v12で追加。日付ピッカーで選んだ任意の比較期間の実データ。
+    // cmpActiveがfalseだった場合はGASもcmpRowsを返さないため空配列にする）
+    RAW.cmpRows = (data.cmpRows || []).map(r => [
       r.product_code   ?? '',
       r.channel        ?? '',
       r.category_name  ?? '',
