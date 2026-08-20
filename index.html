@@ -2894,6 +2894,11 @@ async function loadInventoryData() {
     if (!data.ok) throw new Error(data.error);
     INV = data;
     renderInventory();
+    // MD分析タブのカテゴリ別詳細（在庫金額・消化率）はINVに依存しているが、
+    // ログイン直後はloadBigQueryData()の初回描画がINV取得より先に走るため、
+    // その時点ではまだ「—」表示になってしまう。INV到着時点で現在表示中の
+    // タブを再描画し、揃い次第すぐ反映されるようにする。
+    renderAll();
   } catch(e) {
     console.error('在庫データ取得エラー:', e);
   }
