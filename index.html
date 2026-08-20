@@ -724,6 +724,7 @@ canvas { display:block; }
           <th class="num">売上</th>
           <th class="num">粗利</th>
           <th class="num">粗利率</th>
+          <th class="num">販売数量</th>
           <th class="num">在庫金額</th>
           <th class="num">消化率</th>
         </tr></thead><tbody id="md-cat-tbl"></tbody></table>
@@ -737,6 +738,7 @@ canvas { display:block; }
           <th class="num">売上</th>
           <th class="num">粗利</th>
           <th class="num">粗利率</th>
+          <th class="num">販売数量</th>
           <th class="num">在庫金額</th>
           <th class="num">消化率</th>
         </tr></thead><tbody id="md-series-tbl"></tbody></table>
@@ -1593,9 +1595,10 @@ function renderMD(){
   const rows = filteredRows;
   const cm = {};
   rows.forEach(r => {
-    if(!cm[r[RCAT]]) cm[r[RCAT]] = {s:0, g:0};
+    if(!cm[r[RCAT]]) cm[r[RCAT]] = {s:0, g:0, q:0};
     cm[r[RCAT]].s += r[RS];
     cm[r[RCAT]].g += r[RG];
+    cm[r[RCAT]].q += r[RQ];
   });
   const cats = Object.entries(cm).filter(c => c[1].s > 0).sort((a,b) => b[1].s - a[1].s).slice(0, 10);
 
@@ -1729,7 +1732,7 @@ function renderMD(){
     const strNum = invStrMap[c[0]];
     const strTxt = strNum != null ? strNum.toFixed(1)+'%' : '—';
     const strCol = strNum == null ? 'var(--text3)' : strNum>=50?'var(--green)':strNum>=30?'var(--amber)':'var(--red)';
-    return `<tr><td style="font-weight:600">${c[0]}</td><td class="num">¥${fmtM(c[1].s)}</td><td class="num">¥${fmtM(c[1].g)}</td><td class="num ${grClass(parseFloat(gr)||0)}">${gr}%</td><td class="num">${invVal>0?'¥'+fmtM(invVal):'—'}</td><td class="num" style="color:${strCol};font-weight:600">${strTxt}</td></tr>`;
+    return `<tr><td style="font-weight:600">${c[0]}</td><td class="num">¥${fmtM(c[1].s)}</td><td class="num">¥${fmtM(c[1].g)}</td><td class="num ${grClass(parseFloat(gr)||0)}">${gr}%</td><td class="num">${fmt(c[1].q)}</td><td class="num">${invVal>0?'¥'+fmtM(invVal):'—'}</td><td class="num" style="color:${strCol};font-weight:600">${strTxt}</td></tr>`;
   }).join('');
 
   // シリーズ別詳細テーブル（商品区分３ベース。カテゴリ別詳細と同じ形式で対にする）
@@ -1741,7 +1744,7 @@ function renderMD(){
     const strNum = denom > 0 ? s[1].qty/denom*100 : null;
     const strTxt = strNum != null ? strNum.toFixed(1)+'%' : '—';
     const strCol = strNum == null ? 'var(--text3)' : strNum>=50?'var(--green)':strNum>=30?'var(--amber)':'var(--red)';
-    return `<tr><td style="font-weight:600">${s[0]}</td><td class="num">¥${fmtM(s[1].s)}</td><td class="num">¥${fmtM(s[1].g)}</td><td class="num ${grClass(parseFloat(gr)||0)}">${gr}%</td><td class="num">${invVal>0?'¥'+fmtM(invVal):'—'}</td><td class="num" style="color:${strCol};font-weight:600">${strTxt}</td></tr>`;
+    return `<tr><td style="font-weight:600">${s[0]}</td><td class="num">¥${fmtM(s[1].s)}</td><td class="num">¥${fmtM(s[1].g)}</td><td class="num ${grClass(parseFloat(gr)||0)}">${gr}%</td><td class="num">${fmt(s[1].qty)}</td><td class="num">${invVal>0?'¥'+fmtM(invVal):'—'}</td><td class="num" style="color:${strCol};font-weight:600">${strTxt}</td></tr>`;
   }).join('');
 }
 
@@ -2013,7 +2016,24 @@ function renderMonthlySales() {
       responsive: true, maintainAspectRatio: false,
       plugins: { 
         legend: { position: 'top', labels: { boxWidth: 8, padding: 12 } },
-        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtM(ctx.raw) } }
+        tooltip: {
+          callbacks: {
+            // 前年売上バーは「今年側のx軸ラベル」をそのまま使うと年表記がズレるため、
+            // データセットが「前年売上」の場合は表示月を1年前にずらしたタイトルを組み立てる
+            title: items => {
+              if (!items.length) return '';
+              const item = items[0];
+              const idx  = item.dataIndex;
+              if (item.dataset.label === '前年売上') {
+                const pm = prevMonthOf(months[idx]);
+                const [py, pmm] = pm.split('-');
+                return py + '/' + pmm.replace(/^0/, '') + '月';
+              }
+              return labels[idx];
+            },
+            label: ctx => ctx.dataset.label + ': ' + fmtM(ctx.raw)
+          }
+        }
       },
       scales: {
         x: { grid: { display: false } },
