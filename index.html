@@ -2074,8 +2074,10 @@ function renderMonthlySales() {
     return;
   }
 
-  // 売上0の月はクエリ側(net_sales>0 & GROUP BY)で既に除外されているが、念のため防御的にフィルタ
-  const monthlyRows = RAW.monthly.filter(r => r.sales > 0);
+  // 売上0の月はクエリ側(net_sales>0 & GROUP BY)で既に除外されているが、念のため防御的にフィルタ。
+  // また、monthがnull/undefined/想定外の形式（"YYYY-MM"でない）の行も防御的に除外する
+  // （GAS側で月が算出できなかった行が万一混入しても画面全体がクラッシュしないように）。
+  const monthlyRows = RAW.monthly.filter(r => r.sales > 0 && r.month && /^\d{4}-\d{2}$/.test(r.month));
   const months = monthlyRows.map(r => r.month);
   const labels = months.map(m => {
     const parts = m.split('-');
@@ -2085,7 +2087,7 @@ function renderMonthlySales() {
 
   // 前年同月データ（GASから取得した実データのみ使用。存在しない月はnullにしてバー自体を出さない）
   const prevMap = {};
-  (RAW.monthlyPrev || []).forEach(r => { prevMap[r.month] = r.sales; });
+  (RAW.monthlyPrev || []).forEach(r => { if (r.month && /^\d{4}-\d{2}$/.test(r.month)) prevMap[r.month] = r.sales; });
   const prevMonthOf = m => {
     const [y, mm] = m.split('-');
     return (Number(y) - 1) + '-' + mm;
