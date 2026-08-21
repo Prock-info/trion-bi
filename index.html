@@ -310,6 +310,40 @@ body {
 .card-sub { font-size:10px; color:var(--text3); font-weight:400; margin-left:6px; }
 .badge { font-size:10px; color:var(--amber); background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.2); padding:2px 8px; border-radius:20px; }
 
+/* ===== INFO TOOLTIP（計算ロジック説明。?アイコンにホバーで表示） ===== */
+.info-tip {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:15px; height:15px; border-radius:50%; flex-shrink:0;
+  background: rgba(15,35,64,.08); color:var(--text3);
+  font-size:10px; font-weight:700; cursor:help;
+  position:relative; margin-left:6px; line-height:1;
+  transition: background .15s, color .15s;
+}
+.info-tip:hover, .info-tip:focus { background: var(--accent); color:#fff; outline:none; }
+.info-tip::after {
+  content: attr(data-tip);
+  position:absolute; bottom:calc(100% + 8px); left:50%;
+  transform:translateX(-50%) translateY(4px);
+  background: rgba(15,35,64,.97); color:#fff; font-weight:400;
+  font-size:11px; line-height:1.6; padding:10px 12px; border-radius:10px;
+  width:250px; white-space:normal; text-align:left;
+  opacity:0; visibility:hidden;
+  transition:opacity .15s ease, transform .15s ease, visibility .15s;
+  z-index:600; box-shadow:0 12px 32px rgba(15,35,64,.3);
+  pointer-events:none;
+}
+.info-tip::before {
+  content:'';
+  position:absolute; bottom:calc(100% + 3px); left:50%;
+  transform:translateX(-50%);
+  border:5px solid transparent; border-top-color: rgba(15,35,64,.97);
+  opacity:0; visibility:hidden;
+  transition:opacity .15s ease, visibility .15s;
+  z-index:600;
+}
+.info-tip:hover::after, .info-tip:focus::after { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
+.info-tip:hover::before, .info-tip:focus::before { opacity:1; visibility:visible; }
+
 /* ===== HERO CARD ===== */
 .hero-card {
   border-radius:20px; padding:22px 28px; margin-bottom:16px;
@@ -684,8 +718,8 @@ canvas { display:block; }
     </div>
   </div>
   <div class="row-wide">
-    <div class="card"><div class="card-title">チャネル別 売上 / 粗利</div><div style="height:210px"><canvas id="ch-bar"></canvas></div></div>
-    <div class="card"><div class="card-title">チャネル構成比</div>
+    <div class="card"><div class="card-title"><span>チャネル別 売上 / 粗利<span class="info-tip" tabindex="0" data-tip="選択期間内のnet_sales（税抜売上）・gross_profit（粗利）をチャネル単位で合計。予算・前年実績（常に前年同日付）・比較期間売上（日付ピッカーで選択）も重ねて表示します。">?</span></span></div><div style="height:210px"><canvas id="ch-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>チャネル構成比<span class="info-tip" tabindex="0" data-tip="各チャネルの売上が、選択期間の売上合計に占める割合（%）です。">?</span></span></div>
       <div style="display:flex;align-items:center;gap:16px;height:190px">
         <div style="width:130px;height:130px;flex-shrink:0"><canvas id="ch-donut" style="width:130px!important;height:130px!important"></canvas></div>
         <div class="legend" id="ch-legend"></div>
@@ -693,22 +727,22 @@ canvas { display:block; }
     </div>
   </div>
   <div class="row2" style="margin-bottom:14px">
-    <div class="card"><div class="card-title">ブランド別 売上 / 粗利</div><div style="height:200px"><canvas id="brand-bar"></canvas></div></div>
-    <div class="card"><div class="card-title">ブランド別 実績</div>
+    <div class="card"><div class="card-title"><span>ブランド別 売上 / 粗利<span class="info-tip" tabindex="0" data-tip="TRION/TOMOEなど、ブランド（category1_name）単位で選択期間の売上・粗利を合計します。">?</span></span></div><div style="height:200px"><canvas id="brand-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>ブランド別 実績<span class="info-tip" tabindex="0" data-tip="ブランドごとの売上・粗利・粗利率（粗利÷売上×100）・取扱SKU数です。">?</span></span></div>
       <table class="tbl"><thead><tr><th>ブランド</th><th class="num">売上</th><th class="num">粗利</th><th class="num">粗利率</th><th class="num">SKU数</th></tr></thead>
       <tbody id="brand-tbl"></tbody></table>
     </div>
   </div>
   <div class="row2">
-    <div class="card"><div class="card-title">カテゴリ別 売上 <span class="card-sub">TOP8</span></div><div style="height:220px"><canvas id="cat-bar"></canvas></div></div>
-    <div class="card"><div class="card-title">チャネル × 粗利率</div>
+    <div class="card"><div class="card-title"><span>カテゴリ別 売上<span class="info-tip" tabindex="0" data-tip="選択期間の売上をカテゴリ単位で合計し、上位8カテゴリを表示します。">?</span></span> <span class="card-sub">TOP8</span></div><div style="height:220px"><canvas id="cat-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>チャネル × 粗利率<span class="info-tip" tabindex="0" data-tip="予算比＝売上÷予算×100、予算差＝売上−予算。前年比＝売上÷前年同期間実績×100、前年差＝売上−前年実績。前年実績は日付ピッカーの比較期間トグルとは無関係に、常に前年同日付で算出されます。">?</span></span></div>
       <table class="tbl"><thead><tr><th>チャネル</th><th class="num">売上</th><th class="num" id="cmp-col-head" style="display:none">比較売上</th><th class="num">粗利</th><th class="num">粗利率</th><th class="num">予算</th><th class="num">予算比</th><th class="num">予算差</th><th class="num">前年実績</th><th class="num">前年比</th><th class="num">前年差</th></tr></thead>
       <tbody id="ch-tbl"></tbody></table>
     </div>
   </div>
   <div class="card mb">
     <div class="card-title">
-      年間 月別売上推移
+      <span>年間 月別売上推移<span class="info-tip" tabindex="0" data-tip="選択終了月から過去12ヶ月分の月別売上。前年売上は同月の前年実績（BigQueryに実データがある月のみ表示。無い月はバー自体を表示しません）。">?</span></span>
       <span class="card-sub" id="monthly-period-label"></span>
     </div>
     <div style="height:200px"><canvas id="monthly-bar"></canvas></div>
@@ -718,12 +752,12 @@ canvas { display:block; }
 <!-- ====== CHANNEL ====== -->
 <div id="tab-channel" class="tab-content page">
   <div class="row2">
-    <div class="card"><div class="card-title">得意先別 売上</div>
+    <div class="card"><div class="card-title"><span>得意先別 売上<span class="info-tip" tabindex="0" data-tip="得意先（チャネル）別の売上・粗利・予算比較・前年比較。SUMMARYタブのチャネル×粗利率テーブルと同じ集計ロジックです。">?</span></span></div>
       <div class="tbl-scroll"><table class="tbl"><thead><tr><th></th><th>得意先</th><th>チャネル</th><th class="num">売上</th><th class="num">粗利</th><th class="num">粗利率</th><th class="num">予算</th><th class="num">予算比</th><th class="num">予算差</th><th class="num">前年実績</th><th class="num">前年比</th><th class="num">前年差</th></tr></thead><tbody id="client-tbl"></tbody></table></div>
     </div>
-    <div class="card"><div class="card-title">チャネル別 粗利率</div><div style="height:260px"><canvas id="ch-gross-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>チャネル別 粗利率<span class="info-tip" tabindex="0" data-tip="各チャネルの粗利率＝粗利÷売上×100です。">?</span></span></div><div style="height:260px"><canvas id="ch-gross-bar"></canvas></div></div>
   </div>
-  <div class="card mb"><div class="card-title">店頭（スマレジ）日別売上 <span class="card-sub">2026年5月</span></div><div style="height:180px"><canvas id="daily-bar"></canvas></div></div>
+  <div class="card mb"><div class="card-title"><span>店頭（スマレジ）日別売上<span class="info-tip" tabindex="0" data-tip="スマレジPOSデータをtransaction_datetime基準で日別集計。棒グラフは売上（店舗別に色分けして積み上げ）、折れ線は取引数の合計です。">?</span></span> <span class="card-sub">2026年5月</span></div><div style="height:180px"><canvas id="daily-bar"></canvas></div></div>
 </div>
 
 <!-- ====== MD ====== -->
@@ -737,13 +771,13 @@ canvas { display:block; }
   </div>
 
   <div class="row2">
-    <div class="card"><div class="card-title">カテゴリ別 売上 / 粗利 / 在庫</div><div style="height:280px"><canvas id="md-cat-bar"></canvas></div></div>
-    <div class="card"><div class="card-title">シリーズ別売上 <span class="card-sub">TOP10（商品区分３ベース）</span></div><div style="height:280px"><canvas id="true-series-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>カテゴリ別 売上 / 粗利 / 在庫<span class="info-tip" tabindex="0" data-tip="売上・粗利はカテゴリ単位の合計。在庫金額はv_sell_through（在庫スナップショット）由来で、期間の増減ではなく現在の在庫評価額です。比較期間ONの場合は比較期間売上も表示します。">?</span></span></div><div style="height:280px"><canvas id="md-cat-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>シリーズ別売上<span class="info-tip" tabindex="0" data-tip="商品区分3（category3_name）ベースの「本当のシリーズ」単位で集計。カテゴリより細かい分類です。">?</span></span> <span class="card-sub">TOP10（商品区分３ベース）</span></div><div style="height:280px"><canvas id="true-series-bar"></canvas></div></div>
   </div>
 
   <div class="row2">
     <div class="card">
-      <div class="card-title">カテゴリ別 詳細</div>
+      <div class="card-title"><span>カテゴリ別 詳細<span class="info-tip" tabindex="0" data-tip="消化率＝販売数÷(販売数+在庫数)×100。在庫金額・消化率はv_sell_through（在庫スナップショット）由来です。比較売上は選択した比較期間の実売上（%差分は今期÷比較期間）。">?</span></span></div>
       <div class="tbl-scroll">
         <table class="tbl"><thead><tr>
           <th>カテゴリ</th>
@@ -758,7 +792,7 @@ canvas { display:block; }
       </div>
     </div>
     <div class="card">
-      <div class="card-title">シリーズ別 詳細</div>
+      <div class="card-title"><span>シリーズ別 詳細<span class="info-tip" tabindex="0" data-tip="SKU単位の在庫数・在庫金額をシリーズ（商品区分3）単位にロールアップして算出。カテゴリ別詳細とはデータソースが異なる点にご注意ください。">?</span></span></div>
       <div class="tbl-scroll">
         <table class="tbl"><thead><tr>
           <th>シリーズ</th>
@@ -775,16 +809,16 @@ canvas { display:block; }
   </div>
 
   <div class="row2">
-    <div class="card"><div class="card-title">カテゴリ別 粗利率ランキング</div><div class="bar-list" id="cat-rate-list"></div></div>
-    <div class="card"><div class="card-title">カテゴリ別売上 <span class="card-sub">TOP10</span></div><div style="height:220px"><canvas id="series-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>カテゴリ別 粗利率ランキング<span class="info-tip" tabindex="0" data-tip="カテゴリ別粗利率（粗利÷売上×100）を高い順にランキング表示します。">?</span></span></div><div class="bar-list" id="cat-rate-list"></div></div>
+    <div class="card"><div class="card-title"><span>カテゴリ別売上<span class="info-tip" tabindex="0" data-tip="カテゴリ別売上のシンプルなTOP10横棒グラフです（詳細版のカテゴリ別売上/粗利/在庫グラフとは別に簡易ランキングとして表示）。">?</span></span> <span class="card-sub">TOP10</span></div><div style="height:220px"><canvas id="series-bar"></canvas></div></div>
   </div>
 
   <div class="row2">
-    <div class="card"><div class="card-title">シーズン別 売上構成</div><div style="height:220px"><canvas id="md-season-bar"></canvas></div></div>
-    <div class="card"><div class="card-title">カラー別売上 <span class="card-sub">TOP10（BLACK×〇〇 等はベースカラーで集約）</span></div><div style="height:220px"><canvas id="md-color-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>シーズン別 売上構成<span class="info-tip" tabindex="0" data-tip="商品マスタのシーズン情報（season_name）に基づき、選択期間の売上をシーズン単位で集計します。">?</span></span></div><div style="height:220px"><canvas id="md-season-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>カラー別売上<span class="info-tip" tabindex="0" data-tip="「Black x Orange」のような複合色名は、先頭のベースカラー（この例ではBlack）で集約して集計しています。">?</span></span> <span class="card-sub">TOP10（BLACK×〇〇 等はベースカラーで集約）</span></div><div style="height:220px"><canvas id="md-color-bar"></canvas></div></div>
   </div>
 
-  <div class="card mb"><div class="card-title">カテゴリ別 在庫金額 × 消化率</div><div style="height:220px"><canvas id="md-inv-scatter"></canvas></div></div>
+  <div class="card mb"><div class="card-title"><span>カテゴリ別 在庫金額 × 消化率<span class="info-tip" tabindex="0" data-tip="X軸＝消化率、Y軸＝在庫金額、バブルサイズ＝そのカテゴリの売上構成比。消化率50%以上は青、未満は赤で色分けしています。">?</span></span></div><div style="height:220px"><canvas id="md-inv-scatter"></canvas></div></div>
 </div>
 
 <!-- ====== PRODUCT ====== -->
@@ -797,7 +831,7 @@ canvas { display:block; }
   </div>
   <div class="card mb">
     <div class="card-title" style="margin-bottom:10px">
-      <span>商品別明細（品番 / SKU）</span>
+      <span>商品別明細（品番 / SKU）<span class="info-tip" tabindex="0" data-tip="SKU単位の売上・粗利・消化率一覧。消化率＝販売数÷(販売数+在庫数)×100。比較売上は選択した比較期間の実売上を商品コード単位で突合しています。">?</span></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div class="search-wrap">
           <span class="search-icon">🔍</span>
@@ -829,13 +863,13 @@ canvas { display:block; }
     </div>
   </div>
   <div class="row2">
-    <div class="card"><div class="card-title">消化率分布（SKU数）</div><div style="height:200px"><canvas id="digest-dist"></canvas></div></div>
-    <div class="card"><div class="card-title">カテゴリ × 平均消化率</div><div style="height:200px"><canvas id="cat-digest-bar"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>消化率分布（SKU数）<span class="info-tip" tabindex="0" data-tip="SKUを消化率帯（〜20%/20-40%/40-60%/60-80%/80%+）に分類し、それぞれのSKU数を集計しています。">?</span></span></div><div style="height:200px"><canvas id="digest-dist"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>カテゴリ × 平均消化率<span class="info-tip" tabindex="0" data-tip="カテゴリ単位の平均消化率です。v_sell_through（在庫スナップショット）から取得し、未取得時はSKUデータから直接算出します。">?</span></span></div><div style="height:200px"><canvas id="cat-digest-bar"></canvas></div></div>
   </div>
 
   <!-- 商品ポートフォリオ -->
   <div class="card mb">
-    <div class="card-title">商品ポートフォリオ <span class="card-sub">粗利率 × 売上（バブル = 在庫金額）</span></div>
+    <div class="card-title"><span>商品ポートフォリオ<span class="info-tip" tabindex="0" data-tip="X軸＝粗利率、Y軸＝売上、バブルサイズ＝在庫金額。全SKUの平均粗利率・平均売上を基準に「スター（高粗利×高売上）／育成（高粗利×低売上）／量産（低粗利×高売上）／要検討（低粗利×低売上）」の4象限に分類しています。">?</span></span> <span class="card-sub">粗利率 × 売上（バブル = 在庫金額）</span></div>
     <div style="height:320px"><canvas id="product-portfolio"></canvas></div>
     <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#16A34A;opacity:.7"></div>高粗利×高売上（スター）</div>
@@ -868,7 +902,7 @@ canvas { display:block; }
 <div id="tab-chprod" class="tab-content page">
   <div class="card mb">
     <div class="card-title" style="margin-bottom:10px">
-      <span>品番別 チャネル別 販売数</span>
+      <span>品番別 チャネル別 販売数<span class="info-tip" tabindex="0" data-tip="品番ごとにチャネル別の販売数量（qty_sold）を集計。列ヘッダーをクリックすると、そのチャネル（または合計/カテゴリ）で並び替えできます。">?</span></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div class="search-wrap">
           <span class="search-icon">🔍</span>
@@ -895,7 +929,7 @@ canvas { display:block; }
 <div id="tab-member" class="tab-content page">
   <div class="card mb">
     <div class="card-title" style="margin-bottom:10px">
-      <span>会員 × 商品 クロス集計 <span class="card-sub" id="mc-data-range">（全期間集計・期間絞り込み対象外）</span></span>
+      <span>会員 × 商品 クロス集計<span class="info-tip" tabindex="0" data-tip="選択した行軸・列軸・値（数量/売上/件数）で会員属性×商品属性をクロス集計します。他タブと異なり全期間の実績が対象で、日付ピッカーの期間絞り込みは適用されません。">?</span> <span class="card-sub" id="mc-data-range">（全期間集計・期間絞り込み対象外）</span></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="flabel">行軸</span>
         <select class="pill-select" id="mc-row-axis" onchange="renderMemberCrossPivot()">
@@ -941,11 +975,11 @@ canvas { display:block; }
   <!-- カテゴリ別在庫 + シーズン別消化率 -->
   <div class="row2" style="margin-bottom:16px">
     <div class="card">
-      <div class="card-title">カテゴリ別 在庫金額・消化率</div>
+      <div class="card-title"><span>カテゴリ別 在庫金額・消化率<span class="info-tip" tabindex="0" data-tip="カテゴリ単位の在庫金額合計と消化率。消化率＝販売数÷(販売数+在庫数)×100です。">?</span></span></div>
       <div style="height:260px"><canvas id="inv-cat-bar"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-title">シーズン別 消化率</div>
+      <div class="card-title"><span>シーズン別 消化率<span class="info-tip" tabindex="0" data-tip="シーズン（2018SS〜2026SS等）を古い順に時系列で並べ、それぞれの消化率を表示します。シーズン数が多い場合は直近12シーズンに絞って表示します。">?</span></span></div>
       <div style="height:260px"><canvas id="inv-season-bar"></canvas></div>
     </div>
   </div>
@@ -953,7 +987,7 @@ canvas { display:block; }
   <!-- 商品別消化率テーブル -->
   <div class="card">
     <div class="card-title">
-      商品別 消化率一覧
+      <span>商品別 消化率一覧<span class="info-tip" tabindex="0" data-tip="SKU単位の在庫数・在庫金額・消化率一覧です。データはv_sell_through（在庫スナップショット時点）に基づきます。">?</span></span>
       <span style="margin-left:12px;font-size:11px;font-weight:400;color:var(--text2)">
         絞り込み：
         <select id="inv-filter-cat" onchange="renderInvTable()" style="font-size:11px;padding:2px 6px;border-radius:6px;border:1px solid var(--glass-border2);background:var(--glass-bg);color:var(--navy)">
@@ -993,7 +1027,7 @@ canvas { display:block; }
 <div id="tab-storec" class="tab-content page">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px">🏪 直営店（スマレジ）</div>
+      <div class="card-title" style="margin-bottom:12px"><span>🏪 直営店（スマレジ）<span class="info-tip" tabindex="0" data-tip="客数＝取引ID（transaction_id）のユニーク数。客単価＝売上÷客数。会員率＝会員コードありの取引÷全取引です。">?</span></span></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
@@ -1002,7 +1036,7 @@ canvas { display:block; }
       </div>
     </div>
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px">🛒 EC（FUTURESHOP）</div>
+      <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。新規率＝初回購入（purchase_count=1）の受注÷全受注。注文取消は除外、返品は金額マイナス計上した実質値です。">?</span></span></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">受注数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
@@ -1012,19 +1046,19 @@ canvas { display:block; }
     </div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-    <div class="card"><div class="card-title">直営店 日別売上・客数</div><div style="height:220px"><canvas id="sc-store-daily"></canvas></div></div>
-    <div class="card"><div class="card-title">EC 日別受注・売上</div><div style="height:220px"><canvas id="sc-ec-daily"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>直営店 日別売上・客数<span class="info-tip" tabindex="0" data-tip="取引単位（transaction_id）で集計。棒グラフは店舗別（FLAGSHIP SHOP/日本橋店等）に色分けして積み上げ表示、折れ線は客数です。">?</span></span></div><div style="height:220px"><canvas id="sc-store-daily"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>EC 日別受注・売上<span class="info-tip" tabindex="0" data-tip="受注単位（order_code）で日別集計。注文取消は除外、返品はマイナス計上した実質売上です。">?</span></span></div><div style="height:220px"><canvas id="sc-ec-daily"></canvas></div></div>
   </div>
-  <div class="card mb"><div class="card-title">客単価 週次推移（直営店 × EC）<span class="card-sub">選択期間中心 ± 前後を含め約20週</span></div><div style="height:200px"><canvas id="sc-unit-price"></canvas></div></div>
+  <div class="card mb"><div class="card-title"><span>客単価 週次推移（直営店 × EC）<span class="info-tip" tabindex="0" data-tip="選択期間の開始日を基準に7日単位で区切り、週ごとの客単価（売上÷客数or受注数）を算出。表示期間は選択期間の前後を含め約20週分です。">?</span></span><span class="card-sub">選択期間中心 ± 前後を含め約20週</span></div><div style="height:200px"><canvas id="sc-unit-price"></canvas></div></div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
-    <div class="card"><div class="card-title">時間帯別 来客（直営店）</div><div style="height:180px"><canvas id="sc-hourly"></canvas></div></div>
-    <div class="card"><div class="card-title">決済方法構成（EC）</div>
+    <div class="card"><div class="card-title"><span>時間帯別 来客（直営店）<span class="info-tip" tabindex="0" data-tip="取引時刻（transaction_datetime）の時間帯別に取引数を集計しています。">?</span></span></div><div style="height:180px"><canvas id="sc-hourly"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>決済方法構成（EC）<span class="info-tip" tabindex="0" data-tip="受注単位の決済方法（payment_method）別件数構成比です。">?</span></span></div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
         <div style="width:120px;height:120px;flex-shrink:0"><canvas id="sc-payment" style="width:120px!important;height:120px!important"></canvas></div>
         <div class="legend" id="sc-payment-legend"></div>
       </div>
     </div>
-    <div class="card"><div class="card-title">新規 / リピート（EC）</div>
+    <div class="card"><div class="card-title"><span>新規 / リピート（EC）<span class="info-tip" tabindex="0" data-tip="新規＝初回購入（purchase_count=1）の受注件数。リピート＝2回目以降の受注件数です。">?</span></span></div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
         <div style="width:120px;height:120px;flex-shrink:0"><canvas id="sc-newrepeat" style="width:120px!important;height:120px!important"></canvas></div>
         <div class="legend">
@@ -1036,7 +1070,7 @@ canvas { display:block; }
     </div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-    <div class="card"><div class="card-title">会員 / 非会員 売上比較（直営店）</div>
+    <div class="card"><div class="card-title"><span>会員 / 非会員 売上比較（直営店）<span class="info-tip" tabindex="0" data-tip="取引に会員コード（member_code）が紐づいているかで会員/非会員を判定し、売上・取引数を比較しています。">?</span></span></div>
       <div style="display:flex;align-items:center;gap:16px;height:160px">
         <canvas id="sc-member" style="width:130px!important;height:130px!important"></canvas>
         <div class="legend">
@@ -1046,15 +1080,15 @@ canvas { display:block; }
         </div>
       </div>
     </div>
-    <div class="card"><div class="card-title">会員ステージ別 受注数（EC）</div><div style="height:160px"><canvas id="sc-member-stage"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>会員ステージ別 受注数（EC）<span class="info-tip" tabindex="0" data-tip="受注データの会員ランク（member_rank）別に受注件数を集計しています。">?</span></span></div><div style="height:160px"><canvas id="sc-member-stage"></canvas></div></div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-    <div class="card"><div class="card-title">商品別売上 TOP10（直営店）</div>
+    <div class="card"><div class="card-title"><span>商品別売上 TOP10（直営店）<span class="info-tip" tabindex="0" data-tip="直営店の商品別売上・数量の上位10件です。">?</span></span></div>
       <div class="tbl-scroll" style="max-height:320px">
         <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-store-prod"></tbody></table>
       </div>
     </div>
-    <div class="card"><div class="card-title">商品別売上 TOP10（EC）</div>
+    <div class="card"><div class="card-title"><span>商品別売上 TOP10（EC）<span class="info-tip" tabindex="0" data-tip="ECの商品別売上上位10件です。">?</span></span></div>
       <div class="tbl-scroll" style="max-height:320px">
         <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th class="num">売上</th></tr></thead><tbody id="sc-ec-prod"></tbody></table>
       </div>
@@ -2609,7 +2643,7 @@ function renderStorecTab() {
     </div>` : '';
 
   storeCards[0].innerHTML = `
-    <div class="card-title" style="margin-bottom:12px">🏪 直営店（スマレジ）</div>
+    <div class="card-title" style="margin-bottom:12px"><span>🏪 直営店（スマレジ）<span class="info-tip" tabindex="0" data-tip="客数＝取引ID（transaction_id）のユニーク数。客単価＝売上÷客数。会員率＝会員コードありの取引÷全取引です。">?</span></span></div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">${customers}<span style="font-size:12px;color:var(--text3);font-weight:400">名</span></div></div>
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmtM(sales)}</div></div>
@@ -2625,7 +2659,7 @@ function renderStorecTab() {
   const newRate   = orders > 0 ? Math.round(newOrders / orders * 100) : 0;
 
   storeCards[1].innerHTML = `
-    <div class="card-title" style="margin-bottom:12px">🛒 EC（FUTURESHOP）</div>
+    <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。新規率＝初回購入（purchase_count=1）の受注÷全受注。注文取消は除外、返品は金額マイナス計上した実質値です。">?</span></span></div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">受注数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">${orders}<span style="font-size:12px;color:var(--text3);font-weight:400">件</span></div></div>
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmtM(ecSales)}</div></div>
