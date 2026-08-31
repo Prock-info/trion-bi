@@ -2011,7 +2011,12 @@ function getFilteredProductSkus(){
   const search=(document.getElementById('product-search')||{value:''}).value.toLowerCase();
   const dFilter=(document.getElementById('p-digest-filter')||{value:''}).value;
   const sortKey=(document.getElementById('p-sort')||{value:'sales'}).value;
-  let skus=filteredSkus.filter(r=>r[SS]>0&&!['値引き','歩引き','名入れ'].some(x=>r[SN].includes(x)));
+  // 修正: 従来 r[SS]>0 という条件があり、返品が売上を上回って純売上がマイナスに
+  // なった商品が集計から丸ごと除外されていた。SUMMARYはマイナス値も含めて合算する
+  // ため、この除外により商品分析の合計がSUMMARYより大きくなってしまう不具合があった。
+  // 名前による除外（値引き・歩引き・名入れ）は維持しつつ、マイナス売上商品は
+  // そのまま含めて正しく相殺されるようにする。
+  let skus=filteredSkus.filter(r=>!['値引き','歩引き','名入れ'].some(x=>r[SN].includes(x)));
   if(search)skus=skus.filter(r=>r[SN].toLowerCase().includes(search)||r[SH].toLowerCase().includes(search));
   if(dFilter==='high')skus=skus.filter(r=>r[SD]>=80);
   else if(dFilter==='mid')skus=skus.filter(r=>r[SD]>=40&&r[SD]<80);
