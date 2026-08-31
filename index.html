@@ -1334,7 +1334,14 @@ function toggleDatePicker(){
   dpState.open=open;
   document.getElementById('dp-overlay').classList.toggle('open',open);
   document.getElementById('dp-trigger').classList.toggle('active',open);
-  if(open) renderCalendars();
+  if(open){
+    // 開くたびに必ず固定の月（旧デモ用ハードコード値）が表示されてしまっていたのを修正。
+    // 現在選択中の期間の開始月（無ければ実際の今日の月）を左カレンダーに表示する。
+    const base = dpState.start || today();
+    dpState.leftYear = base.getFullYear();
+    dpState.leftMonth = base.getMonth();
+    renderCalendars();
+  }
 }
 function closeDatePicker(e){ if(e.target===document.getElementById('dp-overlay')) closeDatePickerBtn(); }
 function closeDatePickerBtn(){
@@ -1435,9 +1442,35 @@ function applyFilters(){
     if(sea&&r[SSON]!==sea) return false;
     return true;
   });
+  computeMonthlyFromDetail(brand,ch,cat,ser);
   document.getElementById('filter-count').textContent=filteredRows.length+'件';
   productPage_=0;
   renderAll();
+}
+
+// v27: 「年間 月別売上推移」がフィルタに反応しない不具合の対応。
+// RAW.monthlyDetailRows/RAW.monthlyPrevDetailRows（行レベル明細）に、rowsと同じ
+// フィルタ述語を適用してから月ごとに集計し直し、RAW.monthly/RAW.monthlyPrevに格納する。
+// （シーズンはfilteredRows側の絞り込みでも使っていないため、ここでも対象外にしている）
+function computeMonthlyFromDetail(brand,ch,cat,ser){
+  const pred = r=>{
+    if(brand&&r.category1_name!==brand) return false;
+    if(ch&&r.channel!==ch) return false;
+    if(cat&&r.category_name!==cat) return false;
+    if(ser&&r.category3_name!==ser) return false;
+    return true;
+  };
+  const aggByMonth = rows=>{
+    const map={};
+    rows.filter(pred).forEach(r=>{
+      if(!map[r.month]) map[r.month]={sales:0,gross_profit:0};
+      map[r.month].sales+=r.net_sales;
+      map[r.month].gross_profit+=r.gross_profit;
+    });
+    return Object.keys(map).sort().map(m=>({month:m,sales:map[m].sales,gross_profit:map[m].gross_profit}));
+  };
+  RAW.monthly = aggByMonth(RAW.monthlyDetailRows||[]);
+  RAW.monthlyPrev = aggByMonth(RAW.monthlyPrevDetailRows||[]);
 }
 
 function resetFilters(){
@@ -1447,6 +1480,7 @@ function resetFilters(){
   filteredCmpRows=(RAW.cmpRows||[]).slice();
   cmpDataActive = !!(dpState.applied.compareOn && dpState.applied.cmpStart && dpState.applied.cmpEnd && filteredCmpRows.length>0);
   filteredSkus=RAW.skus.slice();
+  computeMonthlyFromDetail('','','','');
   document.getElementById('filter-count').textContent='全601件';
   productPage_=0;
   renderAll();
@@ -1621,7 +1655,19 @@ function renderChannel(){
   }).join('');
   const days=RAW.daily;
   // スマレジ店舗別日別グラフ
-  const smaData = RAW.smaDaily || [];
+  // v27: チャネルフィルタに対応。スマレジのstore_nameとダッシュボードのチャネル名は
+  // 表記が異なる（例: チャネル「コレド日本橋」＝店舗「TRION日本橋店」）ため、
+  // 対応表で変換してから絞り込む。カテゴリ/ブランド/シリーズはスマレジ生データに
+  // 商品属性が無いため、このグラフには適用できない（絞り込み対象外）。
+  const chFilterVal = document.getElementById('f-channel').value;
+  const channelToStoreName = { 'コレド日本橋':'TRION日本橋店', 'FLAGSHIP SHOP':'FLAGSHIP SHOP' };
+  let smaData = RAW.smaDaily || [];
+  if (chFilterVal) {
+    const mappedStore = channelToStoreName[chFilterVal];
+    // 対応する実店舗が無いチャネル（ONLINE STORE/卸/Amazon/POPUP等）を選んだ場合は、
+    // このグラフの対象外なので空にする
+    smaData = mappedStore ? smaData.filter(d => d.store_name === mappedStore) : [];
+  }
   const storeColors = { 'FLAGSHIP SHOP': P.teal+'BB', 'TRION日本橋店': P.blue+'BB', '不明': P.gray+'BB' };
   const stores = [...new Set(smaData.map(d => d.store_name))].sort();
   const allDays = [...new Set(smaData.map(d => d.day))].sort();
@@ -1666,8 +1712,14 @@ function renderChannel(){
         }
       }
     });
+  } else if (chFilterVal) {
+    // v27: チャネルフィルタの結果、意図的に空になったケース
+    // （対応する実店舗が無いチャネルを選択、またはその店舗にデータが無い）。
+    // ここでRAW.daily（v_sales_unified・全チャネル分）にフォールバックすると
+    // フィルタを無視したように見えてしまうため、チャートを空のまま維持する。
+    if (charts['daily-bar']) { charts['daily-bar'].destroy(); delete charts['daily-bar']; }
   } else {
-    // フォールバック：RAW.dailyから
+    // フォールバック：RAW.dailyから（smaDaily自体が未取得・空の場合のみ）
     const days = RAW.daily || [];
     rebuildChart('daily-bar',{
       type:'bar',
@@ -1684,7 +1736,7 @@ function renderChannel(){
         scales:{
           x:{grid:{display:false},ticks:{font:{size:9}}},
           y:{ticks:{callback:v=>fmtM(v)},grid:{color:'#F0F4F8'},position:'left'},
-          y2:{ticks:{callback:v=>v+'件'},grid:{drawOnChartArea:false},position:'right'}
+          y2:{ticks:{callback:v=>v+'件' },grid:{drawOnChartArea:false},position:'right'}
         }
       }
     });
@@ -1898,7 +1950,7 @@ function renderProductTable(){
   const vd=skus.filter(r=>r[SQ]+Math.max(r[SI],0)>0);
   const avgD=vd.length>0?(vd.reduce((s,r)=>s+r[SD],0)/vd.length).toFixed(1):0;
   document.getElementById('p-sku').innerHTML=total+'<span>SKU</span>';
-  document.getElementById('p-sales').innerHTML=fmtM(totS)+'<span>M</span>';
+  document.getElementById('p-sales').innerHTML=fmtM(totS)+'<span>円</span>';
   document.getElementById('p-grate').innerHTML=Number(avgGR).toFixed(1)+'<span>%</span>';
   document.getElementById('p-digest').innerHTML=avgD+'<span>%</span>';
   // v13: 商品コード単位の比較期間実データ（SK/RCともにproduct_codeで同じキー空間）
@@ -3438,22 +3490,26 @@ async function loadBigQueryData() {
       r.category1_name ?? 'TRION',
     ]);
 
-    // 月別売上データ更新
-    if (data.monthly && data.monthly.length > 0) {
-      RAW.monthly = data.monthly.map(r => ({
-        month: r.month,
-        sales: Number(r.sales ?? 0),
-        gross_profit: Number(r.gross_profit ?? 0),
-      }));
-    } else {
-      RAW.monthly = [];
-    }
-
-    // 月別「前年」売上データ（v11で追加。GASのmonthlyPrevをそのまま保持）。
-    // 実データが無い月はここに含まれない＝renderMonthlySales側でその月の前年バーを描画しない。
-    RAW.monthlyPrev = (data.monthlyPrev || []).map(r => ({
+    // 月別売上データ（v27: 行レベル明細として保持。フィルタ反映後の集計はcomputeMonthlyFromDetail()で行う）
+    RAW.monthlyDetailRows = (data.monthly || []).map(r => ({
       month: r.month,
-      sales: Number(r.sales ?? 0),
+      channel: r.channel ?? '',
+      category_name: r.category_name ?? '',
+      category3_name: r.category3_name ?? '',
+      category1_name: r.category1_name ?? 'TRION',
+      net_sales: Number(r.net_sales ?? 0),
+      gross_profit: Number(r.gross_profit ?? 0),
+    }));
+
+    // 月別「前年」売上の行レベル明細（v11で追加、v27で明細化）。
+    // 実データが無い月はここに含まれない＝renderMonthlySales側でその月の前年バーを描画しない。
+    RAW.monthlyPrevDetailRows = (data.monthlyPrev || []).map(r => ({
+      month: r.month,
+      channel: r.channel ?? '',
+      category_name: r.category_name ?? '',
+      category3_name: r.category3_name ?? '',
+      category1_name: r.category1_name ?? 'TRION',
+      net_sales: Number(r.net_sales ?? 0),
       gross_profit: Number(r.gross_profit ?? 0),
     }));
 
