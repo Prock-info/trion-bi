@@ -1837,8 +1837,11 @@ function renderMD(){
   });
   // 全カテゴリを対象にする（以前は.slice(0,10)でTOP10のみだったが、UI上に
   // TOP表記が無いため、詳細テーブル・KPI・粗利率ランキング・グラフすべてで
-  // 一部カテゴリが欠落しているように見えていた不具合の修正）
-  const cats = Object.entries(cm).filter(c => c[1].s > 0).sort((a,b) => b[1].s - a[1].s);
+  // 一部カテゴリが欠落しているように見えていた不具合の修正）。
+  // さらに c[1].s > 0 の条件も撤廃。値引き(TRION)・歩引き(TRION)等、
+  // カテゴリ単位の合計がマイナスになる調整項目が除外され、SUMMARYの売上合計と
+  // 一致しない不具合があったため（商品分析タブで修正した内容と同根の問題）。
+  const cats = Object.entries(cm).sort((a,b) => b[1].s - a[1].s);
 
   // v13: カテゴリ別の比較期間実データ（売上/粗利/数量）
   const cmpCatM = cmpDataActive ? aggByIndex(filteredCmpRows, RCAT) : {};
@@ -1906,7 +1909,9 @@ function renderMD(){
     smTbl[ser].qty += (r[SQ] || 0);
     smTbl[ser].stockQty += (r[SI] || 0);
   });
-  const sersTbl = Object.entries(smTbl).filter(s => s[1].s > 0).sort((a,b) => b[1].s - a[1].s);
+  // 商品分析・カテゴリ別詳細と同様、s[1].s > 0 の条件を撤廃（値引き・歩引き等の
+  // マイナス調整項目もSUMMARYと一致させるため含める）
+  const sersTbl = Object.entries(smTbl).sort((a,b) => b[1].s - a[1].s);
   const sersTop10 = sersTbl.slice(0, 10);
 
   // v13: シリーズ別の比較期間実データ（商品区分3ベース＝category3_name。RSERと同じキー空間）
