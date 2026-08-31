@@ -1663,16 +1663,43 @@ function renderChannel(){
   // スマレジ店舗別日別グラフ
   // v27: チャネルフィルタに対応。スマレジのstore_nameとダッシュボードのチャネル名は
   // 表記が異なる（例: チャネル「コレド日本橋」＝店舗「TRION日本橋店」）ため、
-  // 対応表で変換してから絞り込む。カテゴリ/ブランド/シリーズはスマレジ生データに
-  // 商品属性が無いため、このグラフには適用できない（絞り込み対象外）。
+  // 対応表で変換してから絞り込む。
+  // v33: カテゴリフィルタにも対応。カテゴリが選択された場合はsmaCategoryDaily
+  // （item_code×v_sell_through JOINで得たカテゴリ・金額付き明細）を使って
+  // 店舗別売上棒グラフを再構成する。ただし取引数（transaction_id単位）は
+  // 1伝票に複数カテゴリの商品が混在し得るため、カテゴリ単位での意味が曖昧になる
+  // ことから、カテゴリフィルタ時は取引数の折れ線を表示しない。
+  // ブランド/シリーズはスマレジ生データに商品属性が無いため対象外。
   const chFilterVal = document.getElementById('f-channel').value;
+  const catFilterValForSma = document.getElementById('f-category').value;
   const channelToStoreName = { 'コレド日本橋':'TRION日本橋店', 'FLAGSHIP SHOP':'FLAGSHIP SHOP' };
-  let smaData = RAW.smaDaily || [];
-  if (chFilterVal) {
-    const mappedStore = channelToStoreName[chFilterVal];
-    // 対応する実店舗が無いチャネル（ONLINE STORE/卸/Amazon/POPUP等）を選んだ場合は、
-    // このグラフの対象外なので空にする
-    smaData = mappedStore ? smaData.filter(d => d.store_name === mappedStore) : [];
+
+  let smaData, showTxLine;
+  if (catFilterValForSma) {
+    // カテゴリ絞り込み: smaCategoryDaily（金額付き）を店舗別に集計し直す
+    let catSrc = RAW.smaCategoryDaily || [];
+    catSrc = catSrc.filter(d => d.category_name === catFilterValForSma);
+    if (chFilterVal) {
+      const mappedStore0 = channelToStoreName[chFilterVal];
+      catSrc = mappedStore0 ? catSrc.filter(d => d.store_name === mappedStore0) : [];
+    }
+    const agg = {};
+    catSrc.forEach(d => {
+      const key = d.day + '|' + d.store_name;
+      if (!agg[key]) agg[key] = { day: d.day, store_name: d.store_name, sales: 0 };
+      agg[key].sales += d.sales;
+    });
+    smaData = Object.values(agg);
+    showTxLine = false;
+  } else {
+    smaData = RAW.smaDaily || [];
+    if (chFilterVal) {
+      const mappedStore = channelToStoreName[chFilterVal];
+      // 対応する実店舗が無いチャネル（ONLINE STORE/卸/Amazon/POPUP等）を選んだ場合は、
+      // このグラフの対象外なので空にする
+      smaData = mappedStore ? smaData.filter(d => d.store_name === mappedStore) : [];
+    }
+    showTxLine = true;
   }
   const storeColors = { 'FLAGSHIP SHOP': P.teal+'BB', 'TRION日本橋店': P.blue+'BB', '不明': P.gray+'BB' };
   const stores = [...new Set(smaData.map(d => d.store_name))].sort();
@@ -1693,11 +1720,11 @@ function renderChannel(){
       yAxisID: 'y',
       order: 2,
     }));
-    // 取引数折れ線
+    // 取引数折れ線（カテゴリ絞り込み時は非表示）
     const txDataset = {
       label: '取引数(合計)',
       type: 'line',
-      data: allDays.map(day => smaData.filter(d => d.day === day).reduce((s,d) => s + d.transactions, 0)),
+      data: allDays.map(day => smaData.filter(d => d.day === day).reduce((s,d) => s + (d.transactions||0), 0)),
       borderColor: P.amber,
       backgroundColor: 'transparent',
       tension: 0.3,
@@ -1707,20 +1734,20 @@ function renderChannel(){
     };
     rebuildChart('daily-bar', {
       type: 'bar',
-      data: { labels: allDays, datasets: [...smaDatasets, txDataset] },
+      data: { labels: allDays, datasets: showTxLine ? [...smaDatasets, txDataset] : smaDatasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { position: 'top', labels: { boxWidth: 8, padding: 8 } } },
         scales: {
           x: { grid: { display: false }, ticks: { font: { size: 9 } }, stacked: true },
           y: { ticks: { callback: v => fmtM(v) }, grid: { color: '#F0F4F8' }, stacked: true },
-          y2: { ticks: { callback: v => v+'件' }, grid: { drawOnChartArea: false }, position: 'right' }
+          y2: { ticks: { callback: v => v+'件' }, grid: { drawOnChartArea: false }, position: 'right', display: showTxLine }
         }
       }
     });
-  } else if (chFilterVal) {
-    // v27: チャネルフィルタの結果、意図的に空になったケース
-    // （対応する実店舗が無いチャネルを選択、またはその店舗にデータが無い）。
+  } else if (chFilterVal || catFilterValForSma) {
+    // v27/v33: チャネル/カテゴリフィルタの結果、意図的に空になったケース
+    // （対応する実店舗が無いチャネルを選択、またはそのカテゴリ・店舗にデータが無い）。
     // ここでRAW.daily（v_sales_unified・全チャネル分）にフォールバックすると
     // フィルタを無視したように見えてしまうため、チャートを空のまま維持する。
     if (charts['daily-bar']) { charts['daily-bar'].destroy(); delete charts['daily-bar']; }
@@ -3607,6 +3634,7 @@ async function loadBigQueryData() {
       store_name:    r.store_name,
       category_name: r.category_name,
       qty:           Number(r.qty ?? 0),
+      sales:         Number(r.sales ?? 0),
     }));
 
     // フィルタ選択肢を更新
