@@ -758,6 +758,12 @@ canvas { display:block; }
     <div class="card"><div class="card-title"><span>チャネル別 粗利率<span class="info-tip" tabindex="0" data-tip="各チャネルの粗利率＝粗利÷売上×100です。">?</span></span></div><div style="height:260px"><canvas id="ch-gross-bar"></canvas></div></div>
   </div>
   <div class="card mb"><div class="card-title"><span>店頭（スマレジ）日別売上<span class="info-tip" tabindex="0" data-tip="スマレジPOSデータをtransaction_datetime基準で日別集計。棒グラフは売上（店舗別に色分けして積み上げ）、折れ線は取引数の合計です。">?</span></span> <span class="card-sub">2026年5月</span></div><div style="height:180px"><canvas id="daily-bar"></canvas></div></div>
+  <div class="card mb">
+    <div class="card-title"><span>店頭（スマレジ）カテゴリ別 日別販売数<span class="info-tip" tabindex="0" data-tip="スマレジの品番（item_code）を商品マスタ（v_sell_through）の品番と突き合わせてカテゴリを取得し、日付×カテゴリで販売数量を集計しています。マッチ率は約79%で、残りはケア用品・修理代・ノベルティ等、店舗限定で通常の商品マスタ管理外にある商品のため「不明／店舗限定品」として一括表示しています。">?</span></span></div>
+    <div class="tbl-scroll" style="max-height:400px">
+      <table class="tbl"><thead><tr id="sma-cat-daily-thead"></tr></thead><tbody id="sma-cat-daily-tbody"></tbody></table>
+    </div>
+  </div>
 </div>
 
 <!-- ====== MD ====== -->
@@ -1740,6 +1746,53 @@ function renderChannel(){
         }
       }
     });
+  }
+
+  // v32: 店頭（スマレジ）カテゴリ別 日別販売数テーブル（縦軸=カテゴリ、横軸=日）
+  // チャネルフィルタ（店舗変換マップ流用）とカテゴリフィルタに対応。
+  // ブランド/シリーズはこのデータソースでは取得できないため対象外。
+  const catFilterVal = document.getElementById('f-category').value;
+  let smaCat = RAW.smaCategoryDaily || [];
+  if (chFilterVal) {
+    const mappedStore2 = channelToStoreName[chFilterVal];
+    smaCat = mappedStore2 ? smaCat.filter(d => d.store_name === mappedStore2) : [];
+  }
+  if (catFilterVal) {
+    smaCat = smaCat.filter(d => d.category_name === catFilterVal);
+  }
+  const catDays = [...new Set(smaCat.map(d => d.day))].sort();
+  const catList = [...new Set(smaCat.map(d => d.category_name))];
+  // 「不明／店舗限定品」は末尾に固定し、それ以外は合計数量の多い順
+  const catTotals = {};
+  smaCat.forEach(d => { catTotals[d.category_name] = (catTotals[d.category_name]||0) + d.qty; });
+  catList.sort((a,b) => {
+    if (a === '不明／店舗限定品') return 1;
+    if (b === '不明／店舗限定品') return -1;
+    return (catTotals[b]||0) - (catTotals[a]||0);
+  });
+
+  const theadEl = document.getElementById('sma-cat-daily-thead');
+  const tbodyEl = document.getElementById('sma-cat-daily-tbody');
+  if (theadEl && tbodyEl) {
+    if (catDays.length === 0 || catList.length === 0) {
+      theadEl.innerHTML = '<th>カテゴリ</th>';
+      tbodyEl.innerHTML = '<tr><td style="text-align:center;padding:24px;color:var(--text3)">データがありません（選択中のチャネルが直営店以外の場合、このテーブルの対象外です）</td></tr>';
+    } else {
+      theadEl.innerHTML = '<th style="position:sticky;left:0;background:rgba(255,255,255,.95);z-index:2">カテゴリ</th>'
+        + catDays.map(d => `<th class="num">${d}</th>`).join('')
+        + '<th class="num" style="font-weight:700">合計</th>';
+      tbodyEl.innerHTML = catList.map(cat => {
+        let rowTotal = 0;
+        const cells = catDays.map(day => {
+          const row = smaCat.find(d => d.day === day && d.category_name === cat);
+          const v = row ? row.qty : 0;
+          rowTotal += v;
+          return `<td class="num${v===0?' muted':''}">${v || '—'}</td>`;
+        }).join('');
+        const isUnknown = cat === '不明／店舗限定品';
+        return `<tr><td style="position:sticky;left:0;background:rgba(255,255,255,.92);font-weight:600;${isUnknown?'color:var(--text3)':''}" title="${cat}">${cat}</td>${cells}<td class="num" style="font-weight:700">${rowTotal}</td></tr>`;
+      }).join('');
+    }
   }
 }
 
@@ -3547,6 +3600,14 @@ async function loadBigQueryData() {
         transactions: Number(r.transactions ?? 0),
       }));
     }
+
+    // スマレジ カテゴリ×日別販売数（v32で追加。item_code×v_sell_through JOIN、マッチ率約79%）
+    RAW.smaCategoryDaily = (data.smaCategoryDaily || []).map(r => ({
+      day:           r.day,
+      store_name:    r.store_name,
+      category_name: r.category_name,
+      qty:           Number(r.qty ?? 0),
+    }));
 
     // フィルタ選択肢を更新
     const chs  = [...new Set(RAW.rows.map(r=>r[RC+1]).filter(Boolean))].sort();
