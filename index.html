@@ -1835,7 +1835,10 @@ function renderMD(){
     cm[r[RCAT]].g += r[RG];
     cm[r[RCAT]].q += r[RQ];
   });
-  const cats = Object.entries(cm).filter(c => c[1].s > 0).sort((a,b) => b[1].s - a[1].s).slice(0, 10);
+  // 全カテゴリを対象にする（以前は.slice(0,10)でTOP10のみだったが、UI上に
+  // TOP表記が無いため、詳細テーブル・KPI・粗利率ランキング・グラフすべてで
+  // 一部カテゴリが欠落しているように見えていた不具合の修正）
+  const cats = Object.entries(cm).filter(c => c[1].s > 0).sort((a,b) => b[1].s - a[1].s);
 
   // v13: カテゴリ別の比較期間実データ（売上/粗利/数量）
   const cmpCatM = cmpDataActive ? aggByIndex(filteredCmpRows, RCAT) : {};
