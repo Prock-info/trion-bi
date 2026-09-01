@@ -3986,29 +3986,56 @@ function chatbotAnswer(question){
   const matchedCategory = categories.find(c => c && q.includes(c));
   const matchedSeries   = seriesList.find(c => c && q.includes(c));
 
-  const isTop    = /一番|トップ|最も|最高|最大|ランキング/.test(q);
+  const isTop    = /一番|トップ|最も|最高|最大|ランキング|高い|多い/.test(q);
   const isBottom = /最低|最小|ワースト|低い|少ない|悪い/.test(q);
   const wantsGrossRate = /粗利率/.test(q);
   const wantsGross     = /粗利(?!率)/.test(q);
-  const wantsInventory = /在庫/.test(q);
-  const wantsDigest    = /消化率/.test(q);
+  const wantsRisk      = /リスク/.test(q);
+  const wantsGrowth    = /伸び|成長|増加|急上昇/.test(q);
+  const wantsInventory = /在庫/.test(q) && !wantsRisk;
+  const wantsDigest    = /消化率/.test(q) || wantsRisk;
   const wantsYoy       = /前年/.test(q);
   const wantsBudget    = /予算/.test(q);
+  const wantsCategory  = /カテゴリ/.test(q);
+  const wantsChannel   = /チャネル/.test(q);
+
+  // ---- 在庫リスク（消化率が低い＝在庫過多）専用。「高い/多い」がリスクの高さを指す
+  // 特殊なケースなので、isTop/isBottomの一般判定より先に処理する ----
+  if(wantsRisk && !matchedChannel && !matchedCategory){
+    const cand = filteredSkus.filter(r=>r[SS]>0 && (r[SQ]+Math.max(r[SI],0))>0);
+    if(cand.length){
+      const sorted = [...cand].sort((a,b)=>a[SD]-b[SD]);
+      const top = sorted[0];
+      return `在庫リスクが最も高い（消化率が低い）商品は「${top[SN]}」（品番${top[SH]}）で、消化率${parseFloat(top[SD]||0).toFixed(1)}%です。`;
+    }
+  }
+
+  // ---- 前年比で伸びている/落ちている商品。品番単位で前年比較する専用分岐 ----
+  if(wantsYoy && wantsGrowth && !matchedChannel && !matchedCategory){
+    const curByProduct = aggByIndex(filteredRows, RC);
+    const prevByProduct = aggByIndex(filteredPrevRows, RC);
+    let best = null;
+    Object.keys(curByProduct).forEach(code=>{
+      const prevS = (prevByProduct[code] && prevByProduct[code].s) || 0;
+      if(prevS < 10000) return; // 意味のある比較のため前年実績に最低ラインを設ける
+      const curS = curByProduct[code].s;
+      const growth = (curS - prevS) / prevS * 100;
+      if(!best || (isBottom ? growth < best.growth : growth > best.growth)){
+        const skuRow = RAW.skus.find(s=>s[SK]===code);
+        best = { growth, curS, prevS, name: skuRow ? skuRow[SN] : code, item_no: skuRow ? skuRow[SH] : code };
+      }
+    });
+    if(best){
+      const arrow = best.growth >= 0 ? '▲' : '▼';
+      return `前年比で最も${isBottom?'落ち込んでいる':'伸びている'}商品は「${best.name}」（品番${best.item_no}）で、前年¥${fmt(best.prevS)}→今期¥${fmt(best.curS)}（${arrow}${Math.abs(best.growth).toFixed(0)}%）です。`;
+    }
+    return '前年比較できる商品（前年実績が一定額以上のもの）が見つかりませんでした。';
+  }
 
   // ---- ランキング系（チャネル・カテゴリ・シリーズを名指ししていない場合） ----
   if(isTop || isBottom){
-    // 粗利率ランキング（チャネル）
-    if(wantsGrossRate && !matchedCategory && !matchedSeries){
-      const cm = aggRows(filteredRows);
-      const withRate = Object.entries(cm).filter(([,v])=>v.s>0).map(([k,v])=>({k, rate: v.g/v.s*100}));
-      if(withRate.length){
-        withRate.sort((a,b)=> isBottom ? a.rate-b.rate : b.rate-a.rate);
-        const top = withRate[0];
-        return `粗利率が${isBottom?'最も低い':'最も高い'}チャネルは「${top.k}」で、${top.rate.toFixed(1)}%です。`;
-      }
-    }
-    // 粗利率ランキング（カテゴリ）
-    if(wantsGrossRate && (/カテゴリ/.test(q) || matchedCategory === undefined)){
+    // 粗利率ランキング（カテゴリ指定がある場合はこちらを優先）
+    if(wantsGrossRate && wantsCategory && !matchedCategory){
       const catM = {};
       filteredRows.forEach(r=>{ if(!catM[r[RCAT]]) catM[r[RCAT]]={s:0,g:0}; catM[r[RCAT]].s+=r[RS]; catM[r[RCAT]].g+=r[RG]; });
       const withRate = Object.entries(catM).filter(([,v])=>v.s>10000).map(([k,v])=>({k, rate: v.g/v.s*100}));
@@ -4016,6 +4043,16 @@ function chatbotAnswer(question){
         withRate.sort((a,b)=> isBottom ? a.rate-b.rate : b.rate-a.rate);
         const top = withRate[0];
         return `粗利率が${isBottom?'最も低い':'最も高い'}カテゴリは「${top.k}」で、${top.rate.toFixed(1)}%です。`;
+      }
+    }
+    // 粗利率ランキング（チャネル。カテゴリ指定が無い場合のデフォルト）
+    if(wantsGrossRate && !matchedCategory && !matchedSeries){
+      const cm = aggRows(filteredRows);
+      const withRate = Object.entries(cm).filter(([,v])=>v.s>0).map(([k,v])=>({k, rate: v.g/v.s*100}));
+      if(withRate.length){
+        withRate.sort((a,b)=> isBottom ? a.rate-b.rate : b.rate-a.rate);
+        const top = withRate[0];
+        return `粗利率が${isBottom?'最も低い':'最も高い'}チャネルは「${top.k}」で、${top.rate.toFixed(1)}%です。`;
       }
     }
     // 消化率が低い/高い商品
@@ -4037,7 +4074,7 @@ function chatbotAnswer(question){
       }
     }
     // カテゴリ別売上ランキング
-    if(/カテゴリ/.test(q)){
+    if(wantsCategory){
       const catM = {};
       filteredRows.forEach(r=>{ if(!catM[r[RCAT]]) catM[r[RCAT]]=0; catM[r[RCAT]]+=r[RS]; });
       const sorted = Object.entries(catM).sort((a,b)=> isBottom ? a[1]-b[1] : b[1]-a[1]);
@@ -4054,7 +4091,7 @@ function chatbotAnswer(question){
         return `売上が${isBottom?'最も低い':'最も高い'}商品は「${top[SN]}」（品番${top[SH]}）で、¥${fmt(top[SS])}です。`;
       }
     }
-    // デフォルト：チャネル別売上ランキング
+    // デフォルト：チャネル別売上ランキング（「チャネル」明記時、またはそれ以外の指定が無い場合）
     const cm = aggRows(filteredRows);
     const sorted = Object.entries(cm).sort((a,b)=> isBottom ? a[1].s-b[1].s : b[1].s-a[1].s);
     if(sorted.length){
