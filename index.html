@@ -918,7 +918,7 @@ canvas { display:block; }
     </div>
     <div class="tbl-scroll">
       <table class="tbl"><thead><tr>
-        <th>#</th><th>品番</th><th>商品名</th><th>カテゴリ</th><th>シーズン</th>
+        <th>#</th><th class="sortable" onclick="sortByColumn('item_no')">品番<span id="sort-ind-item_no"></span></th><th class="sortable" onclick="sortByColumn('product_name')">商品名<span id="sort-ind-product_name"></span></th><th>カテゴリ</th><th>シーズン</th>
         <th class="num sortable" onclick="sortByColumn('sales')">売上<span id="sort-ind-sales"></span></th><th class="num" id="product-cmp-head" style="display:none">比較売上</th>
         <th class="num sortable" onclick="sortByColumn('gross')">粗利<span id="sort-ind-gross"></span></th>
         <th class="num sortable" onclick="sortByColumn('grate')">粗利率<span id="sort-ind-grate"></span></th>
@@ -2204,8 +2204,14 @@ function getFilteredProductSkus(){
   else if(dFilter==='mid')skus=skus.filter(r=>r[SD]>=40&&r[SD]<80);
   else if(dFilter==='low')skus=skus.filter(r=>r[SD]<40);
   const sortMap={sales:SS,gross:SG,grate:SGR,digest:SD,qty:SQ,inv:SI};
+  const strSortMap={item_no:SH,product_name:SN};
   const dir = productSortDir || 1;
-  skus.sort((a,b)=>(b[sortMap[sortKey]||SS]-a[sortMap[sortKey]||SS])*dir);
+  if (strSortMap[sortKey] !== undefined) {
+    const idx = strSortMap[sortKey];
+    skus.sort((a,b)=>String(a[idx]||'').localeCompare(String(b[idx]||''),'ja')*dir);
+  } else {
+    skus.sort((a,b)=>(b[sortMap[sortKey]||SS]-a[sortMap[sortKey]||SS])*dir);
+  }
   return skus;
 }
 
@@ -2222,7 +2228,7 @@ function renderProductTable(){
   const avgD=vd.length>0?(vd.reduce((s,r)=>s+r[SD],0)/vd.length).toFixed(1):0;
   // v50: カラムヘッダーのソート矢印表示を現在のソート状態に合わせて更新
   const curSortKey=(document.getElementById('p-sort')||{value:'sales'}).value;
-  ['sales','gross','grate','qty','inv','digest'].forEach(k=>{
+  ['sales','gross','grate','qty','inv','digest','item_no','product_name'].forEach(k=>{
     const el=document.getElementById('sort-ind-'+k);
     if(el) el.textContent = (k===curSortKey) ? (productSortDir===1?' ▼':' ▲') : '';
   });
