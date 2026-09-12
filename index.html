@@ -433,6 +433,8 @@ select.pill-select { background:rgba(255,255,255,.7); border:1px solid rgba(15,3
 select.pill-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
 
 canvas { display:block; }
+.tbl th.sortable { cursor:pointer; user-select:none; }
+.tbl th.sortable:hover { color:var(--accent); }
 
 /* ===== SUMMARY 自動インサイトカード ===== */
 .insight-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
@@ -903,7 +905,7 @@ canvas { display:block; }
           <span class="search-icon">🔍</span>
           <input class="search-input" id="product-search" placeholder="品番 / 商品名…" oninput="renderProductTable()">
         </div>
-        <select class="pill-select" id="p-sort" onchange="renderProductTable()">
+        <select class="pill-select" id="p-sort" onchange="productSortDir=1;renderProductTable()">
           <option value="sales">売上順</option><option value="gross">粗利順</option><option value="grate">粗利率順</option><option value="digest">消化率順</option><option value="qty">販売数順</option><option value="inv">在庫数順</option>
         </select>
         <select class="pill-select" id="p-digest-filter" onchange="renderProductTable()">
@@ -917,9 +919,12 @@ canvas { display:block; }
     <div class="tbl-scroll">
       <table class="tbl"><thead><tr>
         <th>#</th><th>品番</th><th>商品名</th><th>カテゴリ</th><th>シーズン</th>
-        <th class="num">売上</th><th class="num" id="product-cmp-head" style="display:none">比較売上</th><th class="num">粗利</th><th class="num">粗利率</th>
-        <th class="num">販売数</th><th class="num">在庫数</th>
-        <th style="min-width:100px">消化率</th><th class="num">上代</th>
+        <th class="num sortable" onclick="sortByColumn('sales')">売上<span id="sort-ind-sales"></span></th><th class="num" id="product-cmp-head" style="display:none">比較売上</th>
+        <th class="num sortable" onclick="sortByColumn('gross')">粗利<span id="sort-ind-gross"></span></th>
+        <th class="num sortable" onclick="sortByColumn('grate')">粗利率<span id="sort-ind-grate"></span></th>
+        <th class="num sortable" onclick="sortByColumn('qty')">販売数<span id="sort-ind-qty"></span></th>
+        <th class="num sortable" onclick="sortByColumn('inv')">在庫数<span id="sort-ind-inv"></span></th>
+        <th class="sortable" style="min-width:100px" onclick="sortByColumn('digest')">消化率<span id="sort-ind-digest"></span></th><th class="num">上代</th>
       </tr></thead><tbody id="product-tbody"></tbody></table>
     </div>
     <div class="pagination">
@@ -1154,9 +1159,21 @@ canvas { display:block; }
         <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-store-prod"></tbody></table>
       </div>
     </div>
-    <div class="card"><div class="card-title"><span>商品別売上 TOP10（EC）<span class="info-tip" tabindex="0" data-tip="ECの商品別売上上位10件です。">?</span></span></div>
+    <div class="card"><div class="card-title"><span>商品別売上 TOP10（EC）<span class="info-tip" tabindex="0" data-tip="ECの商品別売上上位10件です。商品名はFUTURESHOPの受注データそのままの表記で、カラー欄にバリエーション（variation_name）を分けて表示しています。">?</span></span></div>
       <div class="tbl-scroll" style="max-height:320px">
-        <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th class="num">売上</th></tr></thead><tbody id="sc-ec-prod"></tbody></table>
+        <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th>カラー</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-ec-prod"></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+    <div class="card"><div class="card-title"><span>シリーズ別売上（直営店）<span class="info-tip" tabindex="0" data-tip="直営店の売上を、品番から商品マスタのシリーズ（商品区分３）に突き合わせて集計しています。マッチしない商品は「未分類」としてまとめています。">?</span></span></div>
+      <div class="tbl-scroll" style="max-height:320px">
+        <table class="tbl"><thead><tr><th>シリーズ</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-store-series"></tbody></table>
+      </div>
+    </div>
+    <div class="card"><div class="card-title"><span>シリーズ別売上（EC）<span class="info-tip" tabindex="0" data-tip="ECの売上を、品番からv_ec_product_match（品番ベースの商品マッチング）経由でシリーズに突き合わせて集計しています。マッチしない商品は「未分類」としてまとめています。EC・店舗を隣り合わせで比較できます。">?</span></span></div>
+      <div class="tbl-scroll" style="max-height:320px">
+        <table class="tbl"><thead><tr><th>シリーズ</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-ec-series"></tbody></table>
       </div>
     </div>
   </div>
@@ -2159,6 +2176,20 @@ function renderMD(){
 // =====================================================================
 // PRODUCT
 // =====================================================================
+// v50: カラムヘッダークリックでの昇順/降順切り替え用
+let productSortDir = 1; // 1=降順, -1=昇順
+function sortByColumn(key){
+  const sel = document.getElementById('p-sort');
+  if (sel.value === key) {
+    productSortDir = -productSortDir;
+  } else {
+    sel.value = key;
+    productSortDir = 1;
+  }
+  productPage_ = 0;
+  renderProductTable();
+}
+
 function getFilteredProductSkus(){
   const search=(document.getElementById('product-search')||{value:''}).value.toLowerCase();
   const dFilter=(document.getElementById('p-digest-filter')||{value:''}).value;
@@ -2173,7 +2204,8 @@ function getFilteredProductSkus(){
   else if(dFilter==='mid')skus=skus.filter(r=>r[SD]>=40&&r[SD]<80);
   else if(dFilter==='low')skus=skus.filter(r=>r[SD]<40);
   const sortMap={sales:SS,gross:SG,grate:SGR,digest:SD,qty:SQ,inv:SI};
-  skus.sort((a,b)=>b[sortMap[sortKey]||SS]-a[sortMap[sortKey]||SS]);
+  const dir = productSortDir || 1;
+  skus.sort((a,b)=>(b[sortMap[sortKey]||SS]-a[sortMap[sortKey]||SS])*dir);
   return skus;
 }
 
@@ -2188,6 +2220,12 @@ function renderProductTable(){
   const avgGR=totS>0?(totG/totS*100).toFixed(1):0;
   const vd=skus.filter(r=>r[SQ]+Math.max(r[SI],0)>0);
   const avgD=vd.length>0?(vd.reduce((s,r)=>s+r[SD],0)/vd.length).toFixed(1):0;
+  // v50: カラムヘッダーのソート矢印表示を現在のソート状態に合わせて更新
+  const curSortKey=(document.getElementById('p-sort')||{value:'sales'}).value;
+  ['sales','gross','grate','qty','inv','digest'].forEach(k=>{
+    const el=document.getElementById('sort-ind-'+k);
+    if(el) el.textContent = (k===curSortKey) ? (productSortDir===1?' ▼':' ▲') : '';
+  });
   document.getElementById('p-sku').innerHTML=total+'<span>SKU</span>';
   document.getElementById('p-sales').innerHTML=fmtM(totS)+'<span>円</span>';
   document.getElementById('p-grate').innerHTML=Number(avgGR).toFixed(1)+'<span>%</span>';
@@ -2769,6 +2807,16 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
   });
   const storeProd = Object.values(storeProdMap).sort((a,b) => b.sales - a.sales).slice(0, 10);
 
+  // v50: シリーズ別（店舗）集計。③シリーズ別売上比較（店舗×EC）用
+  const storeSeriesMap = {};
+  storeRows.forEach(r => {
+    const series = r.series_name || '未分類';
+    if (!storeSeriesMap[series]) storeSeriesMap[series] = { series_name: series, sales: 0, qty: 0 };
+    storeSeriesMap[series].sales += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
+    storeSeriesMap[series].qty   += Number(r.qty || 0);
+  });
+  const storeSeries = Object.values(storeSeriesMap).sort((a,b) => b.sales - a.sales);
+
   // ---- EC：受注(order_code)単位に集約 ----
   const orderMap = {};
   ecRows.forEach(r => {
@@ -2776,6 +2824,9 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
     if (!orderMap[oc]) orderMap[oc] = {
       grand_total: Number(r.grand_total || 0),
       purchase_count: Number(r.purchase_count || 0),
+      // v50: 全購入回数（空白/nullは0扱い）。新規/リピート判定に使用
+      total_purchase_count: (r.total_purchase_count === null || r.total_purchase_count === undefined || r.total_purchase_count === '')
+        ? 0 : Number(r.total_purchase_count),
       payment_method: r.payment_method || '不明',
       member_rank: r.member_rank || '不明',
       day: r.day, date_key: r.date_key,
@@ -2784,7 +2835,10 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
   const orderList = Object.values(orderMap);
   const orders     = orderList.length;
   const ecSales    = orderList.reduce((s,o) => s + o.grand_total, 0);
-  const newOrders  = orderList.filter(o => o.purchase_count === 1).length;
+  // v50: 新規/リピート判定をtotal_purchase_count基準に変更。
+  // 全購入回数が2以上をリピーター、空白/0/1を新規とする（以前はpurchase_count===1のみを
+  // 新規と判定しており、空白/0の受注が判定から漏れて誤ってリピート側に計上されていた）
+  const newOrders  = orderList.filter(o => o.total_purchase_count <= 1).length;
 
   const ecDailyMap = {};
   orderList.forEach(o => {
@@ -2806,20 +2860,35 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
   orderList.forEach(o => { stageMap[o.member_rank] = (stageMap[o.member_rank] || 0) + 1; });
   const ecMemberStage = Object.entries(stageMap).map(([member_rank, cnt]) => ({ member_rank, cnt })).sort((a,b) => b.cnt - a.cnt);
 
+  // v50: EC商品別売上TOP10にカラー（variation_name）・数量も表示できるよう、
+  // 商品名＋バリエーション単位で集計するキーに変更
   const ecProdMap = {};
   ecRows.forEach(r => {
-    const name = r.product_name || '';
-    if (!ecProdMap[name]) ecProdMap[name] = { product_name: name, sales: 0 };
-    ecProdMap[name].sales += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
+    const baseName  = r.product_name || '';
+    const variation = r.variation_name || '';
+    const key = baseName + '|' + variation;
+    if (!ecProdMap[key]) ecProdMap[key] = { product_name: baseName, variation_name: variation, sales: 0, qty: 0 };
+    ecProdMap[key].sales += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
+    ecProdMap[key].qty   += Number(r.qty || 0);
   });
   const ecProd = Object.values(ecProdMap).sort((a,b) => b.sales - a.sales).slice(0, 10);
 
+  // v50: シリーズ別（EC）集計。③シリーズ別売上比較（店舗×EC）用
+  const ecSeriesMap = {};
+  ecRows.forEach(r => {
+    const series = r.series_name || '未分類';
+    if (!ecSeriesMap[series]) ecSeriesMap[series] = { series_name: series, sales: 0, qty: 0 };
+    ecSeriesMap[series].sales += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
+    ecSeriesMap[series].qty   += Number(r.qty || 0);
+  });
+  const ecSeries = Object.values(ecSeriesMap).sort((a,b) => b.sales - a.sales);
+
   return {
     storeKpi:      { customers, sales, member_customers: memberCustomers },
-    storeDaily, storeDailyByStore, storeBreakdown, storeHourly, storeProd,
+    storeDaily, storeDailyByStore, storeBreakdown, storeHourly, storeProd, storeSeries,
     storeMember:   { member_tx: memberCustomers, member_sales: memberSales, nonmember_tx: nonmemberTx, nonmember_sales: nonmemberSales },
     ecKpi:         { orders, sales: ecSales, new_orders: newOrders },
-    ecDaily, ecPayment, ecNewRepeat, ecMemberStage, ecProd,
+    ecDaily, ecPayment, ecNewRepeat, ecMemberStage, ecProd, ecSeries,
     weeklyUnitPrice,
   };
 }
@@ -3131,10 +3200,20 @@ function renderStorecTab() {
     `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.product_name||''}</td><td class="num">¥${fmt(p.sales)}</td><td class="num">${p.qty}</td></tr>`
   ).join('');
 
-  // ---- 商品別売上TOP10（EC）----
+  // ---- 商品別売上TOP10（EC）---- v50: カラー・数量列を追加
   const eProd = document.getElementById('sc-ec-prod');
   if (eProd) eProd.innerHTML = (STOREC.ecProd||[]).map((p,i) =>
-    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.product_name||''}</td><td class="num">¥${fmt(p.sales)}</td></tr>`
+    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.product_name||''}</td><td style="font-size:11px;color:var(--text2)">${p.variation_name||'—'}</td><td class="num">¥${fmt(p.sales)}</td><td class="num">${p.qty}</td></tr>`
+  ).join('');
+
+  // ---- v50: シリーズ別売上（直営店/EC） ----
+  const sSeries = document.getElementById('sc-store-series');
+  if (sSeries) sSeries.innerHTML = (STOREC.storeSeries||[]).map(s =>
+    `<tr><td style="font-weight:600${s.series_name==='未分類'?';color:var(--text3)':''}">${s.series_name}</td><td class="num">¥${fmt(s.sales)}</td><td class="num">${s.qty}</td></tr>`
+  ).join('');
+  const eSeries = document.getElementById('sc-ec-series');
+  if (eSeries) eSeries.innerHTML = (STOREC.ecSeries||[]).map(s =>
+    `<tr><td style="font-weight:600${s.series_name==='未分類'?';color:var(--text3)':''}">${s.series_name}</td><td class="num">¥${fmt(s.sales)}</td><td class="num">${s.qty}</td></tr>`
   ).join('');
 }
 
