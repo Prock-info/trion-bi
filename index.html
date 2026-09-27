@@ -1000,7 +1000,7 @@ canvas { display:block; }
 <div id="tab-member" class="tab-content page">
   <div class="card mb">
     <div class="card-title" style="margin-bottom:10px">
-      <span>会員 × 商品 クロス集計<span class="info-tip" tabindex="0" data-tip="選択した行軸・列軸・値（数量/売上/件数）で会員属性×商品属性をクロス集計します。他タブと異なり全期間の実績が対象で、日付ピッカーの期間絞り込みは適用されません。">?</span> <span class="card-sub" id="mc-data-range">（全期間集計・期間絞り込み対象外）</span></span>
+      <span>会員 × 商品 クロス集計<span class="info-tip" tabindex="0" data-tip="選択した行軸・列軸・値（数量/売上/件数）で会員属性×商品属性をクロス集計します。画面上部の期間・ブランド・カテゴリ・シリーズの絞り込みが反映されます（チャネル・シーズンは対象外）。">?</span> <span class="card-sub" id="mc-data-range"></span></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="flabel">行軸</span>
         <select class="pill-select" id="mc-row-axis" onchange="renderMemberCrossPivot()">
@@ -1500,7 +1500,15 @@ function applyDatePicker(){
   }
   // Update hero label
   document.getElementById('hero-period-label').textContent=fmtDate(dpState.start)+' 〜 '+fmtDate(dpState.end);
-  renderAll();
+  // v59: 直営×EC・会員分析タブを開いたまま期間を変更した場合、従来はrenderAll()経由の
+  // 再描画のみで、期間変更に伴うデータ再取得（loadStorecData/loadMemberCrossData）が
+  // 呼ばれず、古い期間のデータのまま表示され続けてしまっていた。
+  // 両関数は内部で期間キーを見て変化が無ければ再取得をスキップするので、
+  // 常に呼んでおいて問題ない。
+  const activeTabId = document.querySelector('.tab-content.active').id.replace('tab-','');
+  if (activeTabId === 'storec') loadStorecData();
+  else if (activeTabId === 'member') loadMemberCrossData();
+  else renderAll();
 }
 
 // =====================================================================
@@ -1519,6 +1527,19 @@ RAW.filters.categories.forEach(c=>{document.getElementById('f-category').innerHT
 RAW.filters.series.forEach(s=>{document.getElementById('f-series').innerHTML+=`<option>${s}</option>`});
 RAW.filters.seasons.forEach(s=>{document.getElementById('f-season').innerHTML+=`<option>${s}</option>`});
 RAW.filters.channels.forEach(c=>{document.getElementById('f-channel').innerHTML+=`<option>${c}</option>`});
+
+// 現在の画面上部フィルタ（ブランド/チャネル/カテゴリ/シリーズ/シーズン）の選択値を
+// まとめて取得する共通ヘルパー。在庫/直営×EC/会員分析タブなど、複数の場所から
+// 同じ読み取りロジックを使い回すために切り出した。
+function getGlobalFilterValues(){
+  return {
+    brand:   document.getElementById('f-brand') ? document.getElementById('f-brand').value : '',
+    channel: document.getElementById('f-channel').value,
+    cat:     document.getElementById('f-category').value,
+    ser:     document.getElementById('f-series').value,
+    sea:     document.getElementById('f-season').value,
+  };
+}
 
 function applyFilters(){
   const brand=document.getElementById('f-brand')?document.getElementById('f-brand').value:'';
@@ -2735,7 +2756,8 @@ function renderBrandSummary() {
 // =====================================================================
 // 直営×ECタブ
 // =====================================================================
-let STOREC = null;       // 直営×EC 実データキャッシュ
+let STOREC = null;       // 直営×EC 実データキャッシュ（フィルタ適用後の集計結果）
+let STOREC_RAW = null;   // 直営×EC 明細行の生データ（フィルタ変更のたびにここから再集計する）
 let storecLoaded = false;
 let storecLoadedPeriod = null; // 期間が変わったか判定用
 
@@ -2980,6 +3002,7 @@ async function loadStorecData() {
     const url  = `${GAS_URL}?action=storec&token=${encodeURIComponent(SESSION_TOKEN)}&start=${wideStart}&end=${wideEnd}`;
     const data = await jsonp(url);
     if (!data.ok) throw new Error(data.error);
+    STOREC_RAW = { storeRows: data.storeRows || [], ecRows: data.ecRows || [], narrowStart, narrowEnd };
     STOREC = computeStorecAggregates(data.storeRows, data.ecRows, narrowStart, narrowEnd);
     storecLoaded = true;
     storecLoadedPeriod = periodKey;
@@ -2992,7 +3015,50 @@ async function loadStorecData() {
   }
 }
 
+// v59: 画面上部のグローバルフィルタ（ブランド/カテゴリ/シリーズ/チャネル）を
+// STOREC_RAWの明細行に適用し、フィルタ後の行だけをcomputeStorecAggregatesに渡す。
+// チャネルは物理店舗と対応が取れるもの（コレド日本橋/FLAGSHIP SHOP）のみ店舗名で
+// 絞り込み、対応するEC側は無し（店舗選択時はEC側を空にする）。ONLINE STOREは
+// このタブのEC側データがそもそもオンラインストア専用のためそのまま。
+// 卸/Amazon/POPUP等、対応する物理店舗・ECが無いチャネルはこのタブの対象外として
+// 両方空にする。シーズンはv_product_dim_dedupにseason_nameが無く接頭辞推測だと
+// 精度が下がるため、ユーザーと合意の上でこのタブでは対象外。
+const STOREC_CHANNEL_TO_STORE = { 'コレド日本橋': 'TRION日本橋店', 'FLAGSHIP SHOP': 'FLAGSHIP SHOP' };
+function getFilteredStorecInputs() {
+  if (!STOREC_RAW) return null;
+  const f = getGlobalFilterValues();
+  let storeRows = STOREC_RAW.storeRows;
+  let ecRows    = STOREC_RAW.ecRows;
+
+  if (f.channel) {
+    if (f.channel === 'ONLINE STORE') {
+      storeRows = [];
+    } else if (STOREC_CHANNEL_TO_STORE[f.channel]) {
+      storeRows = storeRows.filter(r => r.store_name === STOREC_CHANNEL_TO_STORE[f.channel]);
+      ecRows = [];
+    } else {
+      storeRows = [];
+      ecRows = [];
+    }
+  }
+
+  const productFilter = r => {
+    if (f.brand && r.brand_name    !== f.brand) return false;
+    if (f.cat   && r.category_name !== f.cat)   return false;
+    if (f.ser   && r.series_name   !== f.ser)    return false;
+    return true;
+  };
+  storeRows = storeRows.filter(productFilter);
+  ecRows    = ecRows.filter(productFilter);
+
+  return { storeRows, ecRows };
+}
+
 function renderStorecTab() {
+  if (STOREC_RAW) {
+    const filtered = getFilteredStorecInputs();
+    STOREC = computeStorecAggregates(filtered.storeRows, filtered.ecRows, STOREC_RAW.narrowStart, STOREC_RAW.narrowEnd);
+  }
   if (!STOREC) return;
 
   const k  = STOREC.storeKpi || {};
@@ -3228,16 +3294,22 @@ function renderStorecTab() {
 // =====================================================================
 let MEMBER_CROSS = null;
 let memberCrossLoaded = false;
+let memberCrossLoadedPeriod = null; // 期間が変わったか判定用（v59で追加。以前は全期間固定のため無かった）
 
 async function loadMemberCrossData() {
   if (!SESSION_TOKEN) return;
-  if (memberCrossLoaded) { renderMemberCrossPivot(); return; }
+  const fmtD = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const start = fmtD(dpState.applied.start);
+  const end   = fmtD(dpState.applied.end);
+  const periodKey = start + '_' + end;
+
+  if (memberCrossLoaded && memberCrossLoadedPeriod === periodKey) { renderMemberCrossPivot(); return; }
 
   const tabEl = document.getElementById('tab-member');
   tabEl.style.opacity = '0.5';
   showProgress();
   try {
-    const url  = `${GAS_URL}?action=member_cross&token=${encodeURIComponent(SESSION_TOKEN)}`;
+    const url  = `${GAS_URL}?action=member_cross&token=${encodeURIComponent(SESSION_TOKEN)}&start=${start}&end=${end}`;
     const data = await jsonp(url);
     if (!data.ok) throw new Error(data.error);
 
@@ -3245,6 +3317,7 @@ async function loadMemberCrossData() {
       product_name:         r.product_name         || '未分類',
       category_name:        r.category_name        || '未分類',
       series_name:          r.series_name           || '未分類',
+      brand_name:           r.brand_name            || '未分類', // v59で追加
       member_rank:          r.member_rank           || '不明',
       age_group:            r.age_group             || '不明',
       gender_code:          r.gender_code           || '不明',
@@ -3255,17 +3328,19 @@ async function loadMemberCrossData() {
       order_line_cnt:       Number(r.order_line_cnt  || 0),
     }));
 
-    // 集計対象の実データ期間をバッジに表示（このタブは期間ピッカーの絞り込み対象外のため）
+    // v59: 選択中の期間で絞り込むようになったため、参考情報として実データの
+    // 存在範囲（このバッジ自体は全期間の最小・最大日付のまま）だけ表示する
     const rangeEl = document.getElementById('mc-data-range');
     if (rangeEl) {
       if (data.dataRange && data.dataRange.min && data.dataRange.max) {
-        rangeEl.textContent = `（全期間集計：${data.dataRange.min} 〜 ${data.dataRange.max} ・期間ピッカーの絞り込み対象外）`;
+        rangeEl.textContent = `（データ存在範囲: ${data.dataRange.min} 〜 ${data.dataRange.max}）`;
       } else {
-        rangeEl.textContent = '（全期間集計・期間絞り込み対象外）';
+        rangeEl.textContent = '';
       }
     }
 
     memberCrossLoaded = true;
+    memberCrossLoadedPeriod = periodKey;
     renderMemberCrossPivot();
   } catch(e) {
     console.error('会員クロス集計取得エラー:', e);
@@ -3289,6 +3364,17 @@ function mcAxisLabel(field) {
 function renderMemberCrossPivot() {
   if (!MEMBER_CROSS) return;
 
+  // v59: 画面上部のグローバルフィルタ（ブランド/カテゴリ/シリーズ）を適用。
+  // チャネルはこのタブがEC専用データのため対象外、シーズンはv_product_dim_dedupに
+  // season_nameが無く接頭辞推測だと精度が下がるためユーザーと合意の上で対象外。
+  const gf = getGlobalFilterValues();
+  const source = MEMBER_CROSS.filter(r => {
+    if (gf.brand && r.brand_name    !== gf.brand) return false;
+    if (gf.cat   && r.category_name !== gf.cat)   return false;
+    if (gf.ser   && r.series_name   !== gf.ser)    return false;
+    return true;
+  });
+
   const rowField = document.getElementById('mc-row-axis').value;
   const colField = document.getElementById('mc-col-axis').value;
   const metric   = document.getElementById('mc-value-metric').value;
@@ -3298,7 +3384,7 @@ function renderMemberCrossPivot() {
   // ピボット集計
   const pivot = {};
   const rowSet = new Set(), colSet = new Set();
-  MEMBER_CROSS.forEach(r => {
+  source.forEach(r => {
     const rv = r[rowField], cv = r[colField];
     rowSet.add(rv); colSet.add(cv);
     if (!pivot[rv]) pivot[rv] = {};
@@ -3388,6 +3474,9 @@ function renderAll(){
   else if(id==='md')renderMD();
   else if(id==='product')renderProductTable();
   else if(id==='chprod')renderChannelProductTable();
+  else if(id==='inventory')renderInventory();
+  else if(id==='storec')renderStorecTab();
+  else if(id==='member')renderMemberCrossPivot();
 }
 
 // =====================================================================
@@ -3421,27 +3510,52 @@ async function loadInventoryData() {
 function renderInventory() {
   if (!INV) return;
 
-  // KPIカード更新
-  const k = INV.kpi;
-  document.getElementById('inv-kpi-sku').innerHTML = Number(k.skuCount).toLocaleString() + '<span>SKU</span>';
-  document.getElementById('inv-kpi-qty').innerHTML = Number(k.totalStockQty).toLocaleString() + '<span>点</span>';
-  document.getElementById('inv-kpi-val').innerHTML = Math.round(k.totalStockValue / 10000).toLocaleString() + '<span>万円</span>';
-  const strColor = k.avgSellThruRate >= 0.5 ? 'var(--green)' : k.avgSellThruRate >= 0.3 ? 'var(--amber)' : 'var(--red)';
-  document.getElementById('inv-kpi-str').innerHTML = (k.avgSellThruRate * 100).toFixed(1) + '<span>%</span>';
+  // v57: 画面上部のグローバルフィルタ（ブランド/カテゴリ/シリーズ/シーズン）を反映。
+  // 在庫はチャネル別に分かれた値を持たない（全チャネル横断の在庫数のため）ので、
+  // チャネルフィルタはここでは適用しない。
+  const f = getGlobalFilterValues();
+  const filtered = INV.sellThru.filter(r => {
+    if (f.brand && r.brand_name   !== f.brand) return false;
+    if (f.cat   && r.category_name !== f.cat)  return false;
+    if (f.ser   && r.series_name  !== f.ser)   return false;
+    if (f.sea   && r.season_name  !== f.sea)   return false;
+    return true;
+  });
+  INV._filtered = filtered; // renderInvCatChart/renderInvSeasonChart/renderInvTableで参照
+
+  // KPIカード更新（フィルタ後の集計。GAS側handleInventoryの元の算出方法と揃えている）
+  let totalStockQty = 0, totalStockValue = 0, sellThruSum = 0, sellThruCount = 0;
+  filtered.forEach(r => {
+    totalStockQty   += Number(r.stock_qty   || 0);
+    totalStockValue += Number(r.stock_value || 0);
+    if (r.sell_through_rate !== null && r.sell_through_rate !== undefined) {
+      sellThruSum += Number(r.sell_through_rate || 0);
+      sellThruCount++;
+    }
+  });
+  const avgSellThruRate = sellThruCount > 0 ? sellThruSum / sellThruCount : 0;
+
+  document.getElementById('inv-kpi-sku').innerHTML = filtered.length.toLocaleString() + '<span>SKU</span>';
+  document.getElementById('inv-kpi-qty').innerHTML = Math.round(totalStockQty).toLocaleString() + '<span>点</span>';
+  document.getElementById('inv-kpi-val').innerHTML = Math.round(totalStockValue / 10000).toLocaleString() + '<span>万円</span>';
+  const strColor = avgSellThruRate >= 0.5 ? 'var(--green)' : avgSellThruRate >= 0.3 ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('inv-kpi-str').innerHTML = (avgSellThruRate * 100).toFixed(1) + '<span>%</span>';
   document.getElementById('inv-kpi-str').style.color = strColor;
   // スナップショット日
-  const snapDate = INV.sellThru.length > 0 ? (INV.sellThru[0].inventory_snapshot_date || '—') : '—';
+  const snapDate = filtered.length > 0 ? (filtered[0].inventory_snapshot_date || '—') : '—';
   document.getElementById('inv-kpi-date').textContent = snapDate;
 
   // カテゴリ別グラフ
   renderInvCatChart();
   // シーズン別グラフ
   renderInvSeasonChart();
-  // テーブル用フィルター
+  // テーブル用フィルター（プルダウンの選択肢自体は全カテゴリを維持。選択中の値は保持する）
   const catSel = document.getElementById('inv-filter-cat');
+  const prevVal = catSel.value;
   const cats = [...new Set(INV.sellThru.map(r => r.category_name).filter(Boolean))].sort();
   catSel.innerHTML = '<option value="">すべてのカテゴリ</option>';
   cats.forEach(c => catSel.innerHTML += `<option>${c}</option>`);
+  catSel.value = prevVal;
   // テーブル描画
   renderInvTable();
 }
@@ -3451,7 +3565,23 @@ function renderInvCatChart() {
   if (!ctx || !INV) return;
   if (invCatChart) { invCatChart.destroy(); invCatChart = null; }
 
-  const data = [...INV.catInv].sort((a,b) => Number(b.stock_value) - Number(a.stock_value)).slice(0,10);
+  // v57: フィルタ後のsellThruからカテゴリ別に再集計する（GAS側の事前集計catInvは
+  // フィルタ非対応の全体集計のため、フィルタ選択中は使わない）
+  const src = INV._filtered || INV.sellThru;
+  const catMap = {};
+  src.forEach(r => {
+    const k = r.category_name || '未分類';
+    if (!catMap[k]) catMap[k] = { category_name: k, stock_value: 0, qtySold: 0, stockQty: 0 };
+    catMap[k].stock_value += Number(r.stock_value || 0);
+    catMap[k].qtySold      += Number(r.total_qty_sold || 0);
+    catMap[k].stockQty     += Number(r.stock_qty || 0);
+  });
+  const data = Object.values(catMap).map(c => ({
+    category_name: c.category_name,
+    stock_value: c.stock_value,
+    sell_through_rate: (c.qtySold + c.stockQty) > 0 ? c.qtySold / (c.qtySold + c.stockQty) : 0,
+  })).sort((a,b) => b.stock_value - a.stock_value).slice(0,10);
+
   invCatChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -3512,11 +3642,24 @@ function renderInvSeasonChart() {
   if (!ctx || !INV) return;
   if (invSeasonChart) { invSeasonChart.destroy(); invSeasonChart = null; }
 
+  // v57: フィルタ後のsellThruからシーズン別に再集計する
+  const src = INV._filtered || INV.sellThru;
+  const seaMap = {};
+  src.forEach(r => {
+    const k = r.season_name || '未分類';
+    if (!seaMap[k]) seaMap[k] = { season_name: k, qtySold: 0, stockQty: 0 };
+    seaMap[k].qtySold  += Number(r.total_qty_sold || 0);
+    seaMap[k].stockQty += Number(r.stock_qty || 0);
+  });
+  const agg = Object.values(seaMap).map(s => ({
+    season_name: s.season_name,
+    stock_value: s.stockQty, // フィルタ有無に関わらずstock_value>0判定に使うため代用
+    sell_through_rate: (s.qtySold + s.stockQty) > 0 ? s.qtySold / (s.qtySold + s.stockQty) : 0,
+  }));
+
   // 在庫のあるシーズンを、時系列順（古い→新しい、グラフ左→右）に並べる。
   // シーズン数が多い場合は直近12シーズンに絞る。
-  const sorted = [...INV.seasonInv]
-    .filter(r => Number(r.stock_value) > 0)
-    .sort(seasonCompare);
+  const sorted = agg.filter(r => Number(r.stock_value) > 0).sort(seasonCompare);
   const data = sorted.length > 12 ? sorted.slice(-12) : sorted;
 
   const rates = data.map(r => Number(r.sell_through_rate || 0) * 100);
@@ -3547,7 +3690,9 @@ function renderInvTable() {
   const catFilter = document.getElementById('inv-filter-cat').value;
   const strFilter = document.getElementById('inv-filter-str').value;
 
-  let rows = INV.sellThru.filter(r => {
+  // v57: グローバルフィルタ（ブランド/カテゴリ/シリーズ/シーズン）を適用済みの
+  // INV._filteredを起点にし、このタブ独自のカテゴリ・消化率フィルタをさらに重ねる
+  let rows = (INV._filtered || INV.sellThru).filter(r => {
     if (catFilter && r.category_name !== catFilter) return false;
     const rate = Number(r.sell_through_rate || 0) * 100;
     if (strFilter === 'high' && rate < 80) return false;
