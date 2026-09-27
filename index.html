@@ -1161,7 +1161,7 @@ canvas { display:block; }
 <div id="tab-storec" class="tab-content page">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px"><span>🏪 直営店（スマレジ）<span class="info-tip" tabindex="0" data-tip="客数＝取引ID（transaction_id）のユニーク数。客単価＝売上÷客数。会員率＝会員コードありの取引÷全取引です。">?</span></span></div>
+      <div class="card-title" style="margin-bottom:12px"><span>🏪 直営店（スマレジ）<span class="info-tip" tabindex="0" data-tip="客数＝取引ID（transaction_id）のユニーク数。客単価＝売上÷客数。会員率＝会員コード（member_code）が紐づく取引÷全取引（取引単位のため同一人物の複数来店は別カウント）。">?</span></span></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
@@ -1170,12 +1170,12 @@ canvas { display:block; }
       </div>
     </div>
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。新規率＝初回購入（purchase_count=1）の受注÷全受注。注文取消は除外、返品は金額マイナス計上した実質値です。">?</span></span></div>
+      <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。会員率＝会員に紐づく受注÷全受注（ゲスト購入は非会員）。商品で絞り込み中は該当商品の明細金額で集計します。注文取消は除外、返品は金額マイナス計上した実質値です。">?</span></span></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">受注数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客単価</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
-        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">新規率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">—</div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">会員率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">—</div></div>
       </div>
     </div>
   </div>
@@ -1192,13 +1192,12 @@ canvas { display:block; }
         <div class="legend" id="sc-payment-legend"></div>
       </div>
     </div>
-    <div class="card"><div class="card-title"><span>新規 / リピート（EC）<span class="info-tip" tabindex="0" data-tip="新規＝初回購入（purchase_count=1）の受注件数。リピート＝2回目以降の受注件数です。">?</span></span></div>
+    <div class="card"><div class="card-title"><span>新規 / リピート（EC会員）<span class="info-tip" tabindex="0" data-tip="会員の受注のみを対象に、新規＝累計購入回数（total_purchase_count）が0・1の受注、リピート＝2以上の受注。ゲスト購入は対象外で件数のみ参考表示します。">?</span></span></div>
       <div style="display:flex;align-items:center;gap:14px;height:160px">
         <div style="width:120px;height:120px;flex-shrink:0"><canvas id="sc-newrepeat" style="width:120px!important;height:120px!important"></canvas></div>
         <div class="legend">
-          <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div><div class="legend-lbl">新規</div><div class="legend-val">67</div><div class="legend-pct">66%</div></div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--compare)"></div><div class="legend-lbl">リピート</div><div class="legend-val">35</div><div class="legend-pct">34%</div></div>
-          <div class="legend-item" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(15,35,64,.08)"><div class="legend-lbl" style="color:var(--text3);font-size:10px">会員ステージ保有</div><div class="legend-val" style="font-size:11px">28名</div></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div><div class="legend-lbl">新規</div><div class="legend-val">—</div><div class="legend-pct"></div></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--compare)"></div><div class="legend-lbl">リピート</div><div class="legend-val">—</div><div class="legend-pct"></div></div>
         </div>
       </div>
     </div>
@@ -2827,13 +2826,13 @@ let storecLoadedPeriod = null; // 期間が変わったか判定用
 // 明細行(storeRows/ecRows)からダッシュボード表示用の集計形に変換する。
 // BigQuery側のジョブ数を減らして表示を高速化するため、
 // 日別/時間帯別/決済方法別...の集計はここ(フロント側JS)で行う。
-function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowEnd) {
+function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowEnd, ecLineBased) {
   storeRowsWide = storeRowsWide || [];
   ecRowsWide    = ecRowsWide    || [];
 
   // 週次客単価は「広い範囲」全体を使う。それ以外のKPI/日別/時間帯別等は
   // 従来通り「選択期間のみ」に絞り込んで集計する。
-  const weeklyUnitPrice = computeWeeklyUnitPrice(storeRowsWide, ecRowsWide, narrowStart);
+  const weeklyUnitPrice = computeWeeklyUnitPrice(storeRowsWide, ecRowsWide, narrowStart, ecLineBased);
 
   const inNarrow = dk => (!narrowStart || dk >= narrowStart) && (!narrowEnd || dk <= narrowEnd);
   const storeRows = narrowStart ? storeRowsWide.filter(r => inNarrow(r.date_key)) : storeRowsWide;
@@ -2909,27 +2908,35 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
   const storeSeries = Object.values(storeSeriesMap).sort((a,b) => b.sales - a.sales);
 
   // ---- EC：受注(order_code)単位に集約 ----
+  // v62: ecLineBased=true（ブランド/カテゴリ/シリーズで絞り込み中）の場合は、受注総額ではなく
+  // 該当商品の明細金額（単価×数量）の合計を受注金額とする。従来は該当商品が1行でも含まれると
+  // 受注総額がまるごと計上され、明細単位で集計している店舗側より過大になっていた。
   const orderMap = {};
   ecRows.forEach(r => {
     const oc = r.order_code;
     if (!orderMap[oc]) orderMap[oc] = {
-      grand_total: Number(r.grand_total || 0),
+      grand_total: ecLineBased ? 0 : Number(r.grand_total || 0),
       purchase_count: Number(r.purchase_count || 0),
       // v50: 全購入回数（空白/nullは0扱い）。新規/リピート判定に使用
       total_purchase_count: (r.total_purchase_count === null || r.total_purchase_count === undefined || r.total_purchase_count === '')
         ? 0 : Number(r.total_purchase_count),
+      // v62: 会員判定（GAS v62でtotal_purchase_countの有無から算出。BOOLはREST経由だと文字列で返る）
+      is_member: r.is_member === true || r.is_member === 'true',
       payment_method: r.payment_method || '不明',
       member_rank: r.member_rank || '不明',
       day: r.day, date_key: r.date_key,
     };
+    if (ecLineBased) orderMap[oc].grand_total += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
   });
   const orderList = Object.values(orderMap);
   const orders     = orderList.length;
   const ecSales    = orderList.reduce((s,o) => s + o.grand_total, 0);
-  // v50: 新規/リピート判定をtotal_purchase_count基準に変更。
-  // 全購入回数が2以上をリピーター、空白/0/1を新規とする（以前はpurchase_count===1のみを
-  // 新規と判定しており、空白/0の受注が判定から漏れて誤ってリピート側に計上されていた）
-  const newOrders  = orderList.filter(o => o.total_purchase_count <= 1).length;
+  // v62: 会員率（直営店と定義を揃える）。新規/リピートは会員の受注のみで判定し、
+  // ゲスト購入（累計購入回数なし）は新規に混ぜず別枠で件数のみ保持する。
+  const memberOrderList = orderList.filter(o => o.is_member);
+  const memberOrders = memberOrderList.length;
+  const guestOrders  = orders - memberOrders;
+  const newOrders    = memberOrderList.filter(o => o.total_purchase_count <= 1).length;
 
   const ecDailyMap = {};
   orderList.forEach(o => {
@@ -2944,7 +2951,7 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
   const ecPayment = Object.entries(payMap).map(([payment_method, cnt]) => ({ payment_method, cnt })).sort((a,b) => b.cnt - a.cnt);
 
   const newCnt    = newOrders;
-  const repeatCnt = orders - newOrders;
+  const repeatCnt = memberOrders - newOrders;
   const ecNewRepeat = [{ kind: '新規', cnt: newCnt }, { kind: 'リピート', cnt: repeatCnt }];
 
   const stageMap = {};
@@ -2978,7 +2985,7 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
     storeKpi:      { customers, sales, member_customers: memberCustomers },
     storeDaily, storeDailyByStore, storeBreakdown, storeHourly, storeProd, storeSeries,
     storeMember:   { member_tx: memberCustomers, member_sales: memberSales, nonmember_tx: nonmemberTx, nonmember_sales: nonmemberSales },
-    ecKpi:         { orders, sales: ecSales, new_orders: newOrders },
+    ecKpi:         { orders, sales: ecSales, new_orders: newOrders, member_orders: memberOrders, guest_orders: guestOrders },
     ecDaily, ecPayment, ecNewRepeat, ecMemberStage, ecProd, ecSeries,
     weeklyUnitPrice,
   };
@@ -2987,7 +2994,7 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
 // 客単価の週次推移を計算する（storeRows/ecRowsは選択期間より広い範囲のもの）。
 // narrowStart（選択期間の開始日, 'YYYY-MM-DD'）を基準に7日単位のバケットに区切るので、
 // 期間を変えても週の境界が選択開始日にきちんと揃う。
-function computeWeeklyUnitPrice(storeRowsWide, ecRowsWide, narrowStart) {
+function computeWeeklyUnitPrice(storeRowsWide, ecRowsWide, narrowStart, ecLineBased) {
   storeRowsWide = storeRowsWide || [];
   ecRowsWide    = ecRowsWide    || [];
   if (!narrowStart) return { labels: [], storeUnit: [], ecUnit: [] };
@@ -3018,7 +3025,8 @@ function computeWeeklyUnitPrice(storeRowsWide, ecRowsWide, narrowStart) {
   const orderMap = {};
   ecRowsWide.forEach(r => {
     const oc = r.order_code;
-    if (!orderMap[oc]) orderMap[oc] = { date_key: r.date_key, grand_total: Number(r.grand_total || 0) };
+    if (!orderMap[oc]) orderMap[oc] = { date_key: r.date_key, grand_total: ecLineBased ? 0 : Number(r.grand_total || 0) };
+    if (ecLineBased) orderMap[oc].grand_total += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
   });
   const ecWeekMap = {};
   Object.values(orderMap).forEach(o => {
@@ -3114,13 +3122,13 @@ function getFilteredStorecInputs() {
   storeRows = storeRows.filter(productFilter);
   ecRows    = ecRows.filter(productFilter);
 
-  return { storeRows, ecRows };
+  return { storeRows, ecRows, productFilterActive: !!(f.brand || f.cat || f.ser) };
 }
 
 function renderStorecTab() {
   if (STOREC_RAW) {
     const filtered = getFilteredStorecInputs();
-    STOREC = computeStorecAggregates(filtered.storeRows, filtered.ecRows, STOREC_RAW.narrowStart, STOREC_RAW.narrowEnd);
+    STOREC = computeStorecAggregates(filtered.storeRows, filtered.ecRows, STOREC_RAW.narrowStart, STOREC_RAW.narrowEnd, filtered.productFilterActive);
   }
   if (!STOREC) return;
 
@@ -3143,7 +3151,7 @@ function renderStorecTab() {
     </div>` : '';
 
   storeCards[0].innerHTML = `
-    <div class="card-title" style="margin-bottom:12px"><span>🏪 直営店（スマレジ）<span class="info-tip" tabindex="0" data-tip="客数＝取引ID（transaction_id）のユニーク数。客単価＝売上÷客数。会員率＝会員コードありの取引÷全取引です。">?</span></span></div>
+    <div class="card-title" style="margin-bottom:12px"><span>🏪 直営店（スマレジ）<span class="info-tip" tabindex="0" data-tip="客数＝取引ID（transaction_id）のユニーク数。客単価＝売上÷客数。会員率＝会員コード（member_code）が紐づく取引÷全取引（取引単位のため同一人物の複数来店は別カウント）。">?</span></span></div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">${customers}<span style="font-size:12px;color:var(--text3);font-weight:400">名</span></div></div>
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmtM(sales)}</div></div>
@@ -3151,21 +3159,25 @@ function renderStorecTab() {
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">会員率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${memberRate}<span style="font-size:12px;font-weight:400">%</span></div></div>
     </div>${breakdownHtml}`;
 
-  // ---- KPIカード（EC）----
-  const orders    = Number(ek.orders || 0);
-  const ecSales   = Number(ek.sales  || 0);
-  const newOrders = Number(ek.new_orders || 0);
-  const ecUnit    = orders > 0 ? Math.round(ecSales / orders) : 0;
-  const newRate   = orders > 0 ? Math.round(newOrders / orders * 100) : 0;
+  // ---- KPIカード（EC）---- v62: 新規率→会員率に変更（直営店と定義を揃える）
+  const orders       = Number(ek.orders || 0);
+  const ecSales      = Number(ek.sales  || 0);
+  const memberOrders = Number(ek.member_orders || 0);
+  const ecUnit       = orders > 0 ? Math.round(ecSales / orders) : 0;
+  const ecMemberRate = orders > 0 ? Math.round(memberOrders / orders * 100) : 0;
+  const gfEc = getGlobalFilterValues();
+  const ecLineNote = (gfEc.brand || gfEc.cat || gfEc.ser)
+    ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(15,35,64,.06);font-size:10px;color:var(--text3)">※商品で絞り込み中のため、売上・客単価は該当商品の明細金額の合計（送料等を除く）で算出しています</div>'
+    : '';
 
   storeCards[1].innerHTML = `
-    <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。新規率＝初回購入（purchase_count=1）の受注÷全受注。注文取消は除外、返品は金額マイナス計上した実質値です。">?</span></span></div>
+    <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。客単価＝売上÷受注数。会員率＝会員に紐づく受注÷全受注（ゲスト購入は非会員）。注文取消は除外、返品は金額マイナス計上した実質値です。">?</span></span></div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">受注数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">${orders}<span style="font-size:12px;color:var(--text3);font-weight:400">件</span></div></div>
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmtM(ecSales)}</div></div>
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">客単価</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmt(ecUnit)}</div></div>
-      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">新規率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${newRate}<span style="font-size:12px;font-weight:400">%</span></div></div>
-    </div>`;
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">会員率</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${ecMemberRate}<span style="font-size:12px;font-weight:400">%</span></div></div>
+    </div>${ecLineNote}`;
 
   // ---- 直営店 日別売上・客数（店舗別 積み上げ）----
   const sDailyByStore = STOREC.storeDailyByStore || [];
@@ -3300,7 +3312,8 @@ function renderStorecTab() {
   const nrLegend = document.querySelector('#tab-storec .card:has(#sc-newrepeat) .legend');
   if (nrLegend) nrLegend.innerHTML = `
     <div class="legend-item"><div class="legend-dot" style="background:${P.teal}"></div><div class="legend-lbl">新規</div><div class="legend-val">${newCnt}</div><div class="legend-pct">${Math.round(newCnt/nrTot*100)}%</div></div>
-    <div class="legend-item"><div class="legend-dot" style="background:${P.compare}"></div><div class="legend-lbl">リピート</div><div class="legend-val">${repeatCnt}</div><div class="legend-pct">${Math.round(repeatCnt/nrTot*100)}%</div></div>`;
+    <div class="legend-item"><div class="legend-dot" style="background:${P.compare}"></div><div class="legend-lbl">リピート</div><div class="legend-val">${repeatCnt}</div><div class="legend-pct">${Math.round(repeatCnt/nrTot*100)}%</div></div>
+    <div style="margin-top:8px;font-size:10px;color:var(--text3)">ゲスト購入: ${Number(ek.guest_orders||0)}件（対象外）</div>`;
 
   // ---- 会員/非会員 売上比較（直営店）----
   const sm = STOREC.storeMember || {};
