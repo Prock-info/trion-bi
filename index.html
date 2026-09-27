@@ -1221,9 +1221,9 @@ canvas { display:block; }
         <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-store-prod"></tbody></table>
       </div>
     </div>
-    <div class="card"><div class="card-title"><span>商品別売上 TOP10（EC）<span class="info-tip" tabindex="0" data-tip="ECの商品別売上上位10件です。商品名はFUTURESHOPの受注データそのままの表記で、カラー欄にバリエーション（variation_name）を分けて表示しています。">?</span></span></div>
+    <div class="card"><div class="card-title"><span>商品別売上 TOP10（EC）<span class="info-tip" tabindex="0" data-tip="ECの商品別売上上位10件です。直営店と揃えて「品番 カラー」で表示しています（品番は商品マスタの表記、カラーはFUTURESHOPのバリエーション名）。マスタに無い品番はEC側の品番をそのまま表示し、下段にECの商品名を併記しています。">?</span></span></div>
       <div class="tbl-scroll" style="max-height:320px">
-        <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th>カラー</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-ec-prod"></tbody></table>
+        <table class="tbl"><thead><tr><th>#</th><th>商品名</th><th class="num">売上</th><th class="num">数量</th></tr></thead><tbody id="sc-ec-prod"></tbody></table>
       </div>
     </div>
   </div>
@@ -2958,14 +2958,19 @@ function computeStorecAggregates(storeRowsWide, ecRowsWide, narrowStart, narrowE
   orderList.forEach(o => { stageMap[o.member_rank] = (stageMap[o.member_rank] || 0) + 1; });
   const ecMemberStage = Object.entries(stageMap).map(([member_rank, cnt]) => ({ member_rank, cnt })).sort((a,b) => b.cnt - a.cnt);
 
-  // v50: EC商品別売上TOP10にカラー（variation_name）・数量も表示できるよう、
-  // 商品名＋バリエーション単位で集計するキーに変更
+  // v63: 直営店と揃えて「品番 カラー」単位で集計する。品番は商品マスタのitem_no
+  // （括弧あり 例: GLB109(LA)）を優先し、マスタに無い場合はEC側のproduct_noを使う。
+  // EC側の商品名は補足表示用に保持する。
   const ecProdMap = {};
   ecRows.forEach(r => {
-    const baseName  = r.product_name || '';
+    const itemNo    = r.master_item_no || r.product_no || '';
     const variation = r.variation_name || '';
-    const key = baseName + '|' + variation;
-    if (!ecProdMap[key]) ecProdMap[key] = { product_name: baseName, variation_name: variation, sales: 0, qty: 0 };
+    const key = itemNo + '|' + variation;
+    if (!ecProdMap[key]) ecProdMap[key] = {
+      item_no: itemNo, variation_name: variation,
+      display_name: [itemNo, variation].filter(Boolean).join(' ') || (r.product_name || ''),
+      product_name: r.product_name || '', sales: 0, qty: 0,
+    };
     ecProdMap[key].sales += Number(r.sales_unit_price || 0) * Number(r.qty || 0);
     ecProdMap[key].qty   += Number(r.qty || 0);
   });
@@ -3348,10 +3353,10 @@ function renderStorecTab() {
     `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.product_name||''}</td><td class="num">¥${fmt(p.sales)}</td><td class="num">${p.qty}</td></tr>`
   ).join('');
 
-  // ---- 商品別売上TOP10（EC）---- v50: カラー・数量列を追加
+  // ---- 商品別売上TOP10（EC）---- v63: 直営店と揃えて「品番 カラー」表示（下段にEC商品名）
   const eProd = document.getElementById('sc-ec-prod');
   if (eProd) eProd.innerHTML = (STOREC.ecProd||[]).map((p,i) =>
-    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px">${p.product_name||''}</td><td style="font-size:11px;color:var(--text2)">${p.variation_name||'—'}</td><td class="num">¥${fmt(p.sales)}</td><td class="num">${p.qty}</td></tr>`
+    `<tr><td class="rank ${i<3?'top3':''}">${i+1}</td><td style="font-size:11px" title="${p.product_name||''}">${p.display_name||''}${p.product_name ? `<div style="font-size:9px;color:var(--text3);margin-top:2px">${p.product_name}</div>` : ''}</td><td class="num">¥${fmt(p.sales)}</td><td class="num">${p.qty}</td></tr>`
   ).join('');
 
   // ---- v50: シリーズ別売上（直営店/EC） ----
