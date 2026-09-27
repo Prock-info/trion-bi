@@ -591,6 +591,63 @@ canvas { display:block; }
   width:240px; height:auto;
 }
 
+/* =====================================================================
+   レスポンシブ対応（v60で追加）
+   タブレット(≤1024px)・モバイル(≤640px)の2段階でブレークポイントを設定。
+   名前付きグリッドクラス(.row2/.row3/.row-wide/.kpi-grid/.insight-grid)は
+   個別に列数を落とす。各タブ内に大量に散らばっているインラインの
+   grid-template-columns指定は、1つ1つ書き換えると膨大になるため、
+   属性セレクタ [style*="grid-template-columns"] で一括して上書きする
+   （!importantでインラインstyleの優先度に勝つ）。
+   品番×チャネルの縦持ちピボット表、MD分析のカテゴリ/シリーズ詳細表など、
+   固定列が多い横長テーブルは.tbl-scrollの横スクロールに任せ、
+   完全な再設計は行っていない。
+   ===================================================================== */
+@media (max-width: 1024px) {
+  .kpi-grid { grid-template-columns:repeat(2,1fr); }
+  .insight-grid { grid-template-columns:repeat(2,1fr); }
+  .row3 { grid-template-columns:1fr 1fr; }
+  .row-wide { grid-template-columns:1fr; }
+  .tab-content [style*="grid-template-columns:repeat(4"],
+  .tab-content [style*="grid-template-columns:repeat(3"] {
+    grid-template-columns:repeat(2,1fr) !important;
+  }
+  .main-col.sidebar-pinned { margin-left:56px; } /* タブレットではピン留めしても常時展開しない */
+}
+
+@media (max-width: 640px) {
+  body { font-size:13px; }
+  .main-col { margin-left:0; padding-bottom:64px; } /* サイドバーをボトムナビ的な扱いに寄せる余白 */
+  .header { padding:0 12px; flex-wrap:nowrap; }
+  .logo-tag, .db-badge { display:none; } /* 幅が厳しいモバイルでは補助バッジを間引く */
+  .logo-name { font-size:13px; }
+  .filter-bar { padding:8px 12px; }
+  .filter-bar select { font-size:10px; padding:4px 6px; }
+  .kpi-grid, .insight-grid, .row2, .row3 { grid-template-columns:1fr; }
+  .row-wide { grid-template-columns:1fr; }
+  .tab-content [style*="grid-template-columns"] {
+    grid-template-columns:1fr !important;
+  }
+  .card, .kpi { padding:12px; }
+  .kpi-value { font-size:20px; }
+  /* サイドバーは56pxの縮小幅のまま維持しつつ、タップで機能するようピン留めボタンを
+     常時表示にする（PC版はhoverで初めて出現するため、タッチ操作では出せない） */
+  .tabs { top:0; }
+  .sidebar-pin-btn { opacity:1 !important; }
+  /* チャットパネルは固定360pxだと画面からはみ出すため、画面幅基準に切り替える */
+  .chat-panel { right:12px; left:12px; width:auto; bottom:80px; height:60vh; }
+  .chat-fab { right:16px; bottom:16px; }
+  /* テーブルは横スクロール前提のまま、フォントだけ少し詰める */
+  .tbl th, .tbl td { font-size:11px; padding:6px 8px; }
+  /* 日付ピッカーは min-width:680px 固定だとモバイルで確実にはみ出すため、
+     画面幅基準にし、プリセット一覧とカレンダーを横並び→縦積みに変更。
+     2枚並んでいるカレンダー（開始月/終了月）も縦積みにする。 */
+  .dp-panel { min-width:0; width:calc(100vw - 24px); max-width:400px; flex-direction:column; top:64px; }
+  .dp-presets { width:100%; border-right:none; border-bottom:1px solid rgba(15,35,64,.08); display:flex; overflow-x:auto; padding:8px; }
+  .dp-preset { flex-shrink:0; border-left:none; border-bottom:3px solid transparent; }
+  .dp-calendars { flex-direction:column; gap:8px; }
+}
+
 </style>
 </head>
 <body>
@@ -998,6 +1055,9 @@ canvas { display:block; }
 
 <!-- ====== MEMBER ====== -->
 <div id="tab-member" class="tab-content page">
+  <div id="mc-filter-notice" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:8px 14px;margin-bottom:12px;font-size:11px;color:#B45309">
+    ⚠ このタブはチャネル・シーズンの絞り込みには対応していません（ブランド・カテゴリ・シリーズ・期間は反映されます）。
+  </div>
   <div class="card mb">
     <div class="card-title" style="margin-bottom:10px">
       <span>会員 × 商品 クロス集計<span class="info-tip" tabindex="0" data-tip="選択した行軸・列軸・値（数量/売上/件数）で会員属性×商品属性をクロス集計します。画面上部の期間・ブランド・カテゴリ・シリーズの絞り込みが反映されます（チャネル・シーズンは対象外）。">?</span> <span class="card-sub" id="mc-data-range"></span></span>
@@ -1034,6 +1094,9 @@ canvas { display:block; }
 
 <!-- ====== INVENTORY ====== -->
 <div id="tab-inventory" class="tab-content page">
+  <div id="inv-channel-notice" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:8px 14px;margin-bottom:12px;font-size:11px;color:#B45309">
+    ⚠ 在庫データはチャネル別の内訳を持たないため、チャネルの絞り込みはこのタブには反映されません（ブランド・カテゴリ・シリーズ・シーズンは反映されます）。
+  </div>
   <!-- KPIカード -->
   <div class="kpi-grid">
     <div class="kpi"><div class="kpi-label">総SKU数</div><div class="kpi-value" id="inv-kpi-sku">—<span>SKU</span></div></div>
@@ -3368,6 +3431,8 @@ function renderMemberCrossPivot() {
   // チャネルはこのタブがEC専用データのため対象外、シーズンはv_product_dim_dedupに
   // season_nameが無く接頭辞推測だと精度が下がるためユーザーと合意の上で対象外。
   const gf = getGlobalFilterValues();
+  const noticeEl = document.getElementById('mc-filter-notice');
+  if (noticeEl) noticeEl.style.display = (gf.channel || gf.sea) ? 'block' : 'none';
   const source = MEMBER_CROSS.filter(r => {
     if (gf.brand && r.brand_name    !== gf.brand) return false;
     if (gf.cat   && r.category_name !== gf.cat)   return false;
@@ -3509,6 +3574,10 @@ async function loadInventoryData() {
 
 function renderInventory() {
   if (!INV) return;
+
+  // v59: チャネルはこのタブに反映されないため、選択中であれば注意書きを表示する
+  const noticeEl = document.getElementById('inv-channel-notice');
+  if (noticeEl) noticeEl.style.display = document.getElementById('f-channel').value ? 'block' : 'none';
 
   // v57: 画面上部のグローバルフィルタ（ブランド/カテゴリ/シリーズ/シーズン）を反映。
   // 在庫はチャネル別に分かれた値を持たない（全チャネル横断の在庫数のため）ので、
