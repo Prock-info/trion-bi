@@ -1170,7 +1170,7 @@ canvas { display:block; }
       </div>
     </div>
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。会員率＝会員に紐づく受注÷全受注（ゲスト購入は非会員）。商品で絞り込み中は該当商品の明細金額で集計します。注文取消は除外、返品は金額マイナス計上した実質値です。">?</span></span></div>
+      <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。会員率＝会員に紐づく受注÷全受注（ゲスト購入は非会員）。商品で絞り込み中は該当商品の明細金額で集計します。対象は通常処理・処理済・予約の受注で、注文取消・返品は除外しています。">?</span></span></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">受注数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
         <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">—</div></div>
@@ -1181,7 +1181,7 @@ canvas { display:block; }
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
     <div class="card"><div class="card-title"><span>直営店 日別売上・客数<span class="info-tip" tabindex="0" data-tip="取引単位（transaction_id）で集計。棒グラフは店舗別（FLAGSHIP SHOP/日本橋店等）に色分けして積み上げ表示、折れ線は客数です。">?</span></span></div><div style="height:220px"><canvas id="sc-store-daily"></canvas></div></div>
-    <div class="card"><div class="card-title"><span>EC 日別受注・売上<span class="info-tip" tabindex="0" data-tip="受注単位（order_code）で日別集計。注文取消は除外、返品はマイナス計上した実質売上です。">?</span></span></div><div style="height:220px"><canvas id="sc-ec-daily"></canvas></div></div>
+    <div class="card"><div class="card-title"><span>EC 日別受注・売上<span class="info-tip" tabindex="0" data-tip="受注単位（order_code）で日別集計。対象は通常処理・処理済・予約の受注で、注文取消・返品は除外しています。">?</span></span></div><div style="height:220px"><canvas id="sc-ec-daily"></canvas></div></div>
   </div>
   <div class="card mb"><div class="card-title"><span>客単価 週次推移（直営店 × EC）<span class="info-tip" tabindex="0" data-tip="選択期間の開始日を基準に7日単位で区切り、週ごとの客単価（売上÷客数or受注数）を算出。表示期間は選択期間の前後を含め約20週分です。">?</span></span><span class="card-sub">選択期間中心 ± 前後を含め約20週</span></div><div style="height:200px"><canvas id="sc-unit-price"></canvas></div></div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
@@ -3176,7 +3176,7 @@ function renderStorecTab() {
     : '';
 
   storeCards[1].innerHTML = `
-    <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。客単価＝売上÷受注数。会員率＝会員に紐づく受注÷全受注（ゲスト購入は非会員）。注文取消は除外、返品は金額マイナス計上した実質値です。">?</span></span></div>
+    <div class="card-title" style="margin-bottom:12px"><span>🛒 EC（FUTURESHOP）<span class="info-tip" tabindex="0" data-tip="受注数＝受注コード（order_code）のユニーク数。客単価＝売上÷受注数。会員率＝会員に紐づく受注÷全受注（ゲスト購入は非会員）。対象は通常処理・処理済・予約の受注で、注文取消・返品は除外しています。">?</span></span></div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">受注数</div><div style="font-size:22px;font-weight:700;color:var(--navy)">${orders}<span style="font-size:12px;color:var(--text3);font-weight:400">件</span></div></div>
       <div style="text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">売上合計</div><div style="font-size:22px;font-weight:700;color:var(--navy)">¥${fmtM(ecSales)}</div></div>
