@@ -1095,7 +1095,7 @@ canvas { display:block; }
 <!-- ====== INVENTORY ====== -->
 <div id="tab-inventory" class="tab-content page">
   <div id="inv-channel-notice" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:8px 14px;margin-bottom:12px;font-size:11px;color:#B45309">
-    ⚠ 在庫データはチャネル別の内訳を持たないため、チャネルの絞り込みはこのタブには反映されません（ブランド・カテゴリ・シリーズ・シーズンは反映されます）。
+    ℹ チャネル選択中：対応する倉庫の在庫と、そのチャネルの販売数で表示しています。
   </div>
   <!-- KPIカード -->
   <div class="kpi-grid">
@@ -1104,6 +1104,12 @@ canvas { display:block; }
     <div class="kpi"><div class="kpi-label">総在庫金額</div><div class="kpi-value" id="inv-kpi-val">—<span>万円</span></div></div>
     <div class="kpi"><div class="kpi-label">平均消化率</div><div class="kpi-value" id="inv-kpi-str" style="color:var(--amber)">—<span>%</span></div></div>
     <div class="kpi"><div class="kpi-label">スナップショット日</div><div class="kpi-value" id="inv-kpi-date" style="font-size:15px">—</div></div>
+  </div>
+
+  <!-- v67: チャネル別在庫 -->
+  <div class="card mb">
+    <div class="card-title"><span>チャネル別 在庫金額<span class="info-tip" tabindex="0" data-tip="倉庫ごとの在庫を、倉庫→チャネル対応表で振り分けて集計しています（ONLINE STORE＝WEB・直営保管・本社直営／卸＝シンク本社・本社卸／POPUP＝百貨店等の預け倉庫／それ以外は未分類）。画面上部でチャネルを選ぶと、そのチャネルが強調表示されます。">?</span></span></div>
+    <div style="height:220px"><canvas id="inv-channel-bar"></canvas></div>
   </div>
 
   <!-- カテゴリ別在庫 + シーズン別消化率 -->
@@ -3568,6 +3574,55 @@ function renderAll(){
 let INV = null; // 在庫データキャッシュ
 let invCatChart = null;
 let invSeasonChart = null;
+let invChannelChart = null; // v67
+
+// v67: 在庫のチャネル別内訳。倉庫→チャネルの振り分けはGAS側（WAREHOUSE_CHANNEL_SQL）で行う。
+// 売上側のチャネル名と表記揺れがあっても突き合わせられるよう正規化する。
+const INV_CHANNEL_ORDER = ['ONLINE STORE','Amazon','コレド日本橋','FLAGSHIP SHOP','卸','POPUP','未分類'];
+function invNormChannel(ch){
+  const m = { 'EC':'ONLINE STORE', 'POPUP/百貨店':'POPUP', '卸/BtoB':'卸' };
+  return m[ch] || ch;
+}
+
+function renderInvChannelChart(f, chKey) {
+  const ctx = document.getElementById('inv-channel-bar');
+  if (!ctx || !INV) return;
+  if (invChannelChart) { invChannelChart.destroy(); invChannelChart = null; }
+  const agg = {};
+  (INV.channelStock || []).forEach(r => {
+    if (f.brand && r.brand_name    !== f.brand) return;
+    if (f.cat   && r.category_name !== f.cat)   return;
+    if (f.ser   && r.series_name   !== f.ser)   return;
+    if (f.sea   && r.season_name   !== f.sea)   return;
+    const ch = invNormChannel(r.channel);
+    if (!agg[ch]) agg[ch] = { v: 0, q: 0 };
+    agg[ch].v += Number(r.stock_value || 0);
+    agg[ch].q += Number(r.stock_qty || 0);
+  });
+  const labels = INV_CHANNEL_ORDER.filter(c => agg[c])
+    .concat(Object.keys(agg).filter(c => !INV_CHANNEL_ORDER.includes(c)));
+  const colorOf = c => (c === '未分類' ? P.gray2 : chColor(c));
+  invChannelChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '在庫金額',
+        data: labels.map(c => agg[c].v),
+        backgroundColor: labels.map(c => (!chKey || c === chKey) ? colorOf(c) + 'CC' : 'rgba(203,213,225,.45)'),
+        borderRadius: 5, borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ['在庫金額: ¥' + fmt(c.raw), '在庫数: ' + fmt(agg[labels[c.dataIndex]].q) + '点'] } }
+      },
+      scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => fmtM(v) }, grid: { color: '#F0F4F8' } } }
+    }
+  });
+}
 
 async function loadInventoryData() {
   if (!SESSION_TOKEN) return;
@@ -3593,21 +3648,42 @@ async function loadInventoryData() {
 function renderInventory() {
   if (!INV) return;
 
-  // v59: チャネルはこのタブに反映されないため、選択中であれば注意書きを表示する
-  const noticeEl = document.getElementById('inv-channel-notice');
-  if (noticeEl) noticeEl.style.display = document.getElementById('f-channel').value ? 'block' : 'none';
-
   // v57: 画面上部のグローバルフィルタ（ブランド/カテゴリ/シリーズ/シーズン）を反映。
-  // 在庫はチャネル別に分かれた値を持たない（全チャネル横断の在庫数のため）ので、
-  // チャネルフィルタはここでは適用しない。
   const f = getGlobalFilterValues();
-  const filtered = INV.sellThru.filter(r => {
+  const baseFiltered = INV.sellThru.filter(r => {
     if (f.brand && r.brand_name   !== f.brand) return false;
     if (f.cat   && r.category_name !== f.cat)  return false;
     if (f.ser   && r.series_name  !== f.ser)   return false;
     if (f.sea   && r.season_name  !== f.sea)   return false;
     return true;
   });
+
+  // v67: チャネル選択時は、そのチャネルに対応する倉庫の在庫数・在庫金額と、
+  // そのチャネルの全期間販売数（重複排除済み）で各商品の値を置き換え、消化率を出し直す。
+  const chKey = f.channel ? invNormChannel(f.channel) : '';
+  const noticeEl = document.getElementById('inv-channel-notice');
+  if (noticeEl) {
+    noticeEl.style.display = chKey ? 'block' : 'none';
+    if (chKey) noticeEl.textContent = `ℹ チャネル「${f.channel}」選択中：対応する倉庫の在庫と、このチャネルの販売数（全期間）で表示しています。`;
+  }
+  let filtered = baseFiltered;
+  if (chKey) {
+    const stockMap = {}, salesMap = {};
+    (INV.channelStock || []).forEach(r => { if (invNormChannel(r.channel) === chKey) stockMap[r.product_code] = r; });
+    (INV.channelSales || []).forEach(r => { if (invNormChannel(r.channel) === chKey) salesMap[r.product_code] = r; });
+    filtered = baseFiltered.map(r => {
+      const st = stockMap[r.product_code], sa = salesMap[r.product_code];
+      const stock = st ? Number(st.stock_qty || 0) : 0;
+      const sold  = sa ? Number(sa.qty_sold || 0) : 0;
+      return Object.assign({}, r, {
+        stock_qty: stock,
+        stock_value: st ? Number(st.stock_value || 0) : 0,
+        total_qty_sold: sold,
+        total_net_sales: sa ? Number(sa.net_sales || 0) : 0,
+        sell_through_rate: (sold + stock) !== 0 ? sold / (sold + stock) : null,
+      });
+    }).filter(r => r.stock_qty !== 0 || r.total_qty_sold !== 0);
+  }
   INV._filtered = filtered; // renderInvCatChart/renderInvSeasonChart/renderInvTableで参照
 
   // KPIカード更新（フィルタ後の集計。GAS側handleInventoryの元の算出方法と揃えている）
@@ -3632,6 +3708,8 @@ function renderInventory() {
   const snapDate = filtered.length > 0 ? (filtered[0].inventory_snapshot_date || '—') : '—';
   document.getElementById('inv-kpi-date').textContent = snapDate;
 
+  // v67: チャネル別在庫グラフ
+  renderInvChannelChart(f, chKey);
   // カテゴリ別グラフ
   renderInvCatChart();
   // シーズン別グラフ
