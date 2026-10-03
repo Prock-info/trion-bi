@@ -565,6 +565,11 @@ canvas { display:block; }
   margin-top:4px; transition:background .2s, transform .1s;
 }
 .login-btn:hover { background:#2ec4b6; }
+.login-keep {
+  display:flex; align-items:center; gap:8px;
+  font-size:12px; color:#4A6080; margin:-6px 0 18px; cursor:pointer; user-select:none;
+}
+.login-keep input { width:14px; height:14px; accent-color:#3DD6C8; cursor:pointer; }
 .login-btn:active { transform:scale(0.99); }
 .login-err {
   margin-top:14px; font-size:12px; color:#F05C5C;
@@ -663,11 +668,15 @@ canvas { display:block; }
   <div class="login-left">
     <div class="login-welcome">Welcome Back</div>
     <div class="login-sub">メールアドレスとパスワードを入力してください</div>
-    <label class="login-label">ID</label>
-    <input id="login-id"   class="login-field" type="text"     placeholder="Your ID" autocomplete="username">
-    <label class="login-label">Password</label>
-    <input id="login-pass" class="login-field" type="password" placeholder="Your password" autocomplete="current-password">
-    <button class="login-btn" onclick="doLogin()">SIGN IN</button>
+    <!-- v68: ブラウザのパスワード保存・自動入力が働くよう、正式なログインフォームにした -->
+    <form id="login-form" autocomplete="on" onsubmit="event.preventDefault(); doLogin();">
+      <label class="login-label" for="login-id">ID</label>
+      <input id="login-id"   name="username" class="login-field" type="text"     placeholder="Your ID" autocomplete="username" required>
+      <label class="login-label" for="login-pass">Password</label>
+      <input id="login-pass" name="password" class="login-field" type="password" placeholder="Your password" autocomplete="current-password" required>
+      <label class="login-keep"><input type="checkbox" id="login-keep" checked> ログイン状態を保持する（8時間）</label>
+      <button class="login-btn" type="submit">SIGN IN</button>
+    </form>
     <div class="login-err" id="login-err"></div>
   </div>
   <!-- 右：ブランド -->
@@ -3999,6 +4008,42 @@ async function loadLatestPeriod() {
 }
 
 // ========== ログイン ==========
+// v68: ①ブラウザのパスワード保存に対応（ログイン部分を<form>化し、成功時に資格情報を保存）
+//      ②「ログイン状態を保持する」にチェックした場合、トークンをブラウザに保存し、
+//        有効期限（8時間）内は再読み込みやタブを閉じた後もログインを省略する。
+//        トークンはGAS v68で署名付きになっており、改ざんしても無効になる。
+const SESSION_STORAGE_KEY = 'trion_bi_session';
+
+function saveSession(token, userId, expiresAt) {
+  try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ token, userId, expiresAt })); } catch(e) {}
+}
+function loadSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || 'null');
+    if (!s || !s.token || !s.expiresAt || Date.now() > Number(s.expiresAt)) { clearSession(); return null; }
+    return s;
+  } catch(e) { return null; }
+}
+function clearSession() {
+  try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch(e) {}
+}
+
+// ログイン成功後（手動ログイン・保持セッションからの復帰の共通処理）
+async function afterLogin() {
+  document.getElementById('user-avatar').textContent = SESSION_USER.charAt(0).toUpperCase();
+  document.getElementById('user-name').textContent   = SESSION_USER;
+  document.getElementById('login-overlay').classList.add('hidden');
+
+  document.getElementById('db-badge').textContent = '⟳ 最新データ確認中...';
+  // 最新の_source_dateを取得して期間を自動設定
+  await loadLatestPeriod();
+
+  document.getElementById('db-badge').textContent = '⟳ データ読み込み中...';
+  await loadBigQueryData();
+  await loadBudgetData();     // 予算データ（GASへの同時リクエストを避けるため順番に実行）
+  await loadInventoryData();  // 在庫データ
+}
+
 async function doLogin() {
   const id   = document.getElementById('login-id').value.trim();
   const pass = document.getElementById('login-pass').value;
@@ -4021,20 +4066,22 @@ async function doLogin() {
 
     SESSION_TOKEN = data.token;
     SESSION_USER  = data.userId;
+    errEl.textContent = '';
 
-    document.getElementById('user-avatar').textContent = SESSION_USER.charAt(0).toUpperCase();
-    document.getElementById('user-name').textContent   = SESSION_USER;
-    document.getElementById('login-overlay').classList.add('hidden');
+    // ① ブラウザに資格情報の保存を促す（Chrome/Edge。Safari等はフォーム送信を検知して保存を提案する）
+    if (window.PasswordCredential && navigator.credentials) {
+      try { await navigator.credentials.store(new PasswordCredential({ id, password: pass, name: id })); } catch(e) {}
+    }
 
-    document.getElementById('db-badge').textContent = '⟳ 最新データ確認中...';
-    
-    // 最新の_source_dateを取得して期間を自動設定
-    await loadLatestPeriod();
-    
-    document.getElementById('db-badge').textContent = '⟳ データ読み込み中...';
-    await loadBigQueryData();
-    await loadBudgetData();     // 予算データ（GASへの同時リクエストを避けるため順番に実行）
-    await loadInventoryData();  // 在庫データ
+    // ② ログイン状態の保持
+    const keep = document.getElementById('login-keep');
+    if (keep && keep.checked) {
+      saveSession(data.token, data.userId, data.expiresAt || (Date.now() + 8 * 3600 * 1000));
+    } else {
+      clearSession();
+    }
+
+    await afterLogin();
 
   } catch(e) {
     errEl.textContent = 'ネットワークエラー: ' + e.message;
@@ -4042,26 +4089,35 @@ async function doLogin() {
   }
 }
 
-function doLogout() {
-  if (!confirm('ログアウトしますか？')) return;
+// ログアウト時・セッション切れ時の共通処理（確認ダイアログなし）
+function resetToLogin(message) {
   SESSION_TOKEN = null;
   SESSION_USER  = null;
   isLiveMode    = false;
+  clearSession();
   document.getElementById('login-overlay').classList.remove('hidden');
   document.getElementById('login-pass').value = '';
-  document.getElementById('login-err').textContent = '';
+  const errEl = document.getElementById('login-err');
+  errEl.textContent = message || '';
+  errEl.style.color = message ? 'var(--red)' : '';
   document.getElementById('db-badge').textContent = '⚡ DB接続準備中';
   document.getElementById('db-badge').style.background = '';
   document.getElementById('db-badge').style.color = '';
 }
 
-// Enterキーでログイン
+function doLogout() {
+  if (!confirm('ログアウトしますか？')) return;
+  resetToLogin('');
+}
+
+// ページ読み込み時：保持中のログイン状態があれば、ログイン画面を出さずに復帰する
 document.addEventListener('DOMContentLoaded', () => {
-  ['login-id','login-pass'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => {
-      if (e.key === 'Enter') doLogin();
-    });
-  });
+  const s = loadSession();
+  if (s) {
+    SESSION_TOKEN = s.token;
+    SESSION_USER  = s.userId;
+    afterLogin();
+  }
 });
 
 // ========== GASプロキシ経由でBigQueryデータ取得 ==========
@@ -4082,8 +4138,8 @@ async function loadBigQueryData() {
 
     if (!data.ok) {
       if (data.error === 'UNAUTHORIZED' || data.error === 'SESSION_EXPIRED') {
-        alert('セッションが切れました。再ログインしてください。');
-        doLogout();
+        // v68: 確認ダイアログを出さずにログイン画面へ戻す（保持中のログイン状態も破棄）
+        resetToLogin('ログインの有効期限が切れました。再度ログインしてください。');
         return;
       }
       throw new Error(data.error);
