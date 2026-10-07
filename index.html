@@ -4082,9 +4082,18 @@ let loginTicket = null;     // GASが発行する手順間の一時チケット
 let loginPassCache = '';    // ブラウザへのパスワード保存用（ログイン完了時に破棄）
 
 async function gasPost(payload) {
-  const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return res.json();
+  // 通常はPOST（パスワードをURLに載せない）。ただしブラウザがGoogle Workspaceのアカウントに
+  // ログインしているとGAS側で別URLへリダイレクトされ、POST本文が失われてUNAUTHORIZEDが返る
+  // ことがある（v70で判明）。その場合や通信エラー時のみ、GET（JSONP）で再送する。
+  try {
+    const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
+    if (res.ok) {
+      const data = await res.json();
+      if (!(data && data.error === 'UNAUTHORIZED')) return data;
+    }
+  } catch (e) {}
+  const qs = Object.keys(payload).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k])).join('&');
+  return jsonp(GAS_URL + '?' + qs);
 }
 
 // v70: パスワード欄の表示／非表示の切り替え（目のアイコン）
