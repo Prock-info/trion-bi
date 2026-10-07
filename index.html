@@ -3956,9 +3956,12 @@ let SESSION_USER  = null;
 let isLiveMode    = false;
 
 // ========== JSONP helper（CORS回避）==========
+let _jsonpSeq = 0;
 function jsonp(url) {
   return new Promise((resolve, reject) => {
-    const cb = 'trion_cb_' + Date.now();
+    // v71: 同時に複数リクエストを送っても名前が重ならないよう、連番＋乱数を付ける
+    // （従来はDate.now()のみで、同じミリ秒に2件送るとコールバックが衝突していた）
+    const cb = 'trion_cb_' + Date.now() + '_' + (++_jsonpSeq) + '_' + Math.floor(Math.random() * 1e6);
     const script = document.createElement('script');
     const timer = setTimeout(() => {
       cleanup();
@@ -4069,9 +4072,8 @@ async function afterLogin() {
   await loadLatestPeriod();
 
   document.getElementById('db-badge').textContent = '⟳ データ読み込み中...';
-  await loadBigQueryData();
-  await loadBudgetData();     // 予算データ（GASへの同時リクエストを避けるため順番に実行）
-  await loadInventoryData();  // 在庫データ
+  // v71: 売上・予算・在庫を並列で取得（JSONPのコールバック名の衝突を解消したため同時実行可能）
+  await Promise.all([loadBigQueryData(), loadBudgetData(), loadInventoryData()]);
 }
 
 // ---- v69: 個人アカウント＋メール2段階認証のログイン手順 ----
@@ -4081,7 +4083,12 @@ let loginStep = 'cred';     // 'cred' | 'newpw' | 'otp'
 let loginTicket = null;     // GASが発行する手順間の一時チケット
 let loginPassCache = '';    // ブラウザへのパスワード保存用（ログイン完了時に破棄）
 
+let _authUseJsonp = false;   // v71: 一度POSTが失敗したら、以後はこのタブではJSONPで送る（無駄な往復を省く）
 async function gasPost(payload) {
+  if (_authUseJsonp) {
+    const qs0 = Object.keys(payload).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k])).join('&');
+    return jsonp(GAS_URL + '?' + qs0);
+  }
   // 通常はPOST（パスワードをURLに載せない）。ただしブラウザがGoogle Workspaceのアカウントに
   // ログインしているとGAS側で別URLへリダイレクトされ、POST本文が失われてUNAUTHORIZEDが返る
   // ことがある（v70で判明）。その場合や通信エラー時のみ、GET（JSONP）で再送する。
@@ -4092,6 +4099,7 @@ async function gasPost(payload) {
       if (!(data && data.error === 'UNAUTHORIZED')) return data;
     }
   } catch (e) {}
+  _authUseJsonp = true;
   const qs = Object.keys(payload).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k])).join('&');
   return jsonp(GAS_URL + '?' + qs);
 }
@@ -4502,8 +4510,7 @@ applyDatePicker = async function() {
   _origApplyDatePicker();
   if (isLiveMode && SESSION_TOKEN) {
     document.getElementById('db-badge').textContent = '⟳ データ更新中...';
-    await loadBigQueryData();
-    await loadBudgetData();
+    await Promise.all([loadBigQueryData(), loadBudgetData()]);   // v71: 並列取得
   }
   const activeTabId = document.querySelector('.tab-content.active').id;
   if (activeTabId === 'tab-storec' && SESSION_TOKEN) {
