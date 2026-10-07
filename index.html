@@ -3957,7 +3957,9 @@ let isLiveMode    = false;
 
 // ========== JSONP helper（CORS回避）==========
 let _jsonpSeq = 0;
-function jsonp(url) {
+// v76: retries … GAS側の一時的なエラー（同時実行の混雑など）で読み込みに失敗した場合に自動で再試行する回数。
+// データ取得は1回まで再試行。ログイン系（gasPost）はメール送信や確認コードの消費を伴うため再試行しない。
+function jsonp(url, retries = 1) {
   return new Promise((resolve, reject) => {
     // v71: 同時に複数リクエストを送っても名前が重ならないよう、連番＋乱数を付ける
     // （従来はDate.now()のみで、同じミリ秒に2件送るとコールバックが衝突していた）
@@ -3973,7 +3975,15 @@ function jsonp(url) {
       clearTimeout(timer);
     }
     window[cb] = (data) => { cleanup(); resolve(data); };
-    script.onerror = () => { cleanup(); reject(new Error('JSONP load error')); };
+    script.onerror = () => {
+      cleanup();
+      if (retries > 0) {
+        console.warn('JSONP load error → 再試行します', url.split('&token=')[0]);
+        setTimeout(() => { jsonp(url, retries - 1).then(resolve, reject); }, 1500);
+      } else {
+        reject(new Error('JSONP load error'));
+      }
+    };
     script.src = url + (url.includes('?') ? '&' : '?') + `callback=${cb}`;
     document.head.appendChild(script);
   });
@@ -4088,7 +4098,7 @@ let loginPassCache = '';    // ブラウザへのパスワード保存用（ロ�
 // 環境によって発生したため。通信はHTTPSで暗号化されており、JSONPのURLはブラウザ履歴にも残らない。
 async function gasPost(payload) {
   const qs = Object.keys(payload).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k])).join('&');
-  return jsonp(GAS_URL + '?' + qs);
+  return jsonp(GAS_URL + '?' + qs, 0);   // ログイン系は再試行しない
 }
 
 // v70: パスワード欄の表示／非表示の切り替え（目のアイコン）
