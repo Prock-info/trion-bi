@@ -4077,29 +4077,16 @@ async function afterLogin() {
 }
 
 // ---- v69: 個人アカウント＋メール2段階認証のログイン手順 ----
-// 認証系の通信はPOST（パスワードをURLに載せない）。Content-Typeを付けない単純リクエストにして、
-// GAS Webアプリへのクロスオリジン通信でもプリフライトが発生しないようにしている。
+// 認証系の通信はv72でJSONPに統一（下記gasPost参照）。
 let loginStep = 'cred';     // 'cred' | 'newpw' | 'otp'
 let loginTicket = null;     // GASが発行する手順間の一時チケット
 let loginPassCache = '';    // ブラウザへのパスワード保存用（ログイン完了時に破棄）
 
-let _authUseJsonp = false;   // v71: 一度POSTが失敗したら、以後はこのタブではJSONPで送る（無駄な往復を省く）
+// v72: 認証もデータ取得と同じJSONP（GET）で送る方式に統一。
+// POST方式は、ブラウザがGoogle Workspaceのアカウントにログインしていると、GAS側の転送や
+// クロスオリジン制限で応答が画面に届かない（メールは送られるのに次の画面に進まない）事象が
+// 環境によって発生したため。通信はHTTPSで暗号化されており、JSONPのURLはブラウザ履歴にも残らない。
 async function gasPost(payload) {
-  if (_authUseJsonp) {
-    const qs0 = Object.keys(payload).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k])).join('&');
-    return jsonp(GAS_URL + '?' + qs0);
-  }
-  // 通常はPOST（パスワードをURLに載せない）。ただしブラウザがGoogle Workspaceのアカウントに
-  // ログインしているとGAS側で別URLへリダイレクトされ、POST本文が失われてUNAUTHORIZEDが返る
-  // ことがある（v70で判明）。その場合や通信エラー時のみ、GET（JSONP）で再送する。
-  try {
-    const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
-    if (res.ok) {
-      const data = await res.json();
-      if (!(data && data.error === 'UNAUTHORIZED')) return data;
-    }
-  } catch (e) {}
-  _authUseJsonp = true;
   const qs = Object.keys(payload).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k])).join('&');
   return jsonp(GAS_URL + '?' + qs);
 }
